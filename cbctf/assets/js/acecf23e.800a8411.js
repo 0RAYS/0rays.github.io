@@ -1,0 +1,1 @@
+"use strict";(self.webpackChunkcbctf_docs=self.webpackChunkcbctf_docs||[]).push([[1903],{1912:c=>{c.exports=JSON.parse('{"blogBasePath":"/cbctf/blog","blogTitle":"Blog","authorsListPath":"/cbctf/blog/authors"}')}}]);

@@ -1,0 +1,1 @@
+"use strict";(self.webpackChunkcbctf_docs=self.webpackChunkcbctf_docs||[]).push([[9674],{3743:e=>{e.exports=JSON.parse('{"categoryGeneratedIndex":{"title":"\u5f00\u59cb","slug":"/category/\u5f00\u59cb","permalink":"/cbctf/docs/category/\u5f00\u59cb","sidebar":"guideSidebar","navigation":{"next":{"title":"\u7b80\u4ecb","permalink":"/cbctf/docs/start/introduction"}}}}')}}]);

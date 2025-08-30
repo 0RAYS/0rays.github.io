@@ -1,0 +1,1 @@
+"use strict";(self.webpackChunkcbctf_docs=self.webpackChunkcbctf_docs||[]).push([[7262],{1884:t=>{t.exports=JSON.parse('{"metadata":{"permalink":"/cbctf/blog","page":1,"postsPerPage":10,"totalPages":1,"totalCount":4,"blogDescription":"Blog","blogTitle":"Blog"}}')}}]);
