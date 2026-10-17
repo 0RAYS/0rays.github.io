@@ -1,0 +1,2504 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
+  <title>逆向奇观：自行车骑鹈鹕 | Le Vélo Chevauchant le Pélican</title>
+  <style>
+    :root {
+      --bg-deep: #091926;
+      --panel-bg: rgba(11, 27, 42, 0.76);
+      --panel-border: rgba(235, 190, 108, 0.34);
+      --accent-coral: #ff6b3d;
+      --accent-gold: #f0bf59;
+      --accent-crimson: #e62e3d;
+      --accent-teal: #2dd4bf;
+      --text-main: #f7f1e3;
+      --text-dim: #b7c4cf;
+      --font-display: "Georgia", "Songti SC", "STSong", "Noto Serif SC", serif;
+      --font-sans: "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+      --font-mono: "Consolas", "SFMono-Regular", monospace;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+
+    html, body {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background: radial-gradient(circle at 50% 35%, #1c4966 0%, #091926 100%);
+      font-family: var(--font-sans);
+      color: var(--text-main);
+    }
+
+    #webgl-container {
+      position: fixed;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      cursor: grab;
+    }
+
+    #webgl-container:active {
+      cursor: grabbing;
+    }
+
+    /* Atmospheric vignette overlay */
+    .vignette {
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      background: radial-gradient(circle at center, transparent 58%, rgba(4, 12, 20, 0.42) 100%);
+      z-index: 2;
+    }
+
+    /* HUD Layout */
+    #hud {
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      z-index: 10;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      padding: 20px 24px;
+      transition: opacity 0.35s ease, transform 0.35s ease;
+    }
+
+    #hud.hud-hidden .hud-panel {
+      opacity: 0;
+      transform: translateY(12px);
+      pointer-events: none;
+    }
+
+    .top-bar {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 16px;
+      flex-wrap: wrap;
+    }
+
+    .hud-panel {
+      pointer-events: auto;
+      background: var(--panel-bg);
+      backdrop-filter: blur(14px);
+      -webkit-backdrop-filter: blur(14px);
+      border: 1px solid var(--panel-border);
+      border-radius: 16px;
+      box-shadow: 0 14px 36px rgba(0, 0, 0, 0.38), inset 0 1px 0 rgba(255, 255, 255, 0.12);
+      transition: opacity 0.3s ease, transform 0.3s ease, border-color 0.25s ease;
+    }
+
+    .brand-card {
+      padding: 14px 20px;
+      max-width: 440px;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .brand-card::before {
+      content: "";
+      position: absolute;
+      left: 0;
+      top: 0;
+      bottom: 0;
+      width: 5px;
+      background: linear-gradient(180deg, var(--accent-crimson), var(--accent-gold), var(--accent-coral));
+    }
+
+    .badge-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 5px;
+    }
+
+    .badge-tag {
+      display: inline-block;
+      padding: 2px 8px;
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      border-radius: 999px;
+      background: linear-gradient(90deg, var(--accent-crimson), var(--accent-coral));
+      color: #fff;
+    }
+
+    .badge-sub {
+      font-size: 11px;
+      color: var(--accent-gold);
+      letter-spacing: 0.06em;
+      font-family: var(--font-mono);
+    }
+
+    .brand-title {
+      font-family: var(--font-display);
+      font-size: 22px;
+      font-weight: 700;
+      letter-spacing: 0.02em;
+      color: var(--text-main);
+      line-height: 1.2;
+      margin-bottom: 4px;
+    }
+
+    .brand-desc {
+      font-size: 12.5px;
+      color: var(--text-dim);
+      line-height: 1.45;
+    }
+
+    /* Telemetry Card */
+    .telemetry-card {
+      padding: 12px 18px;
+      display: grid;
+      grid-template-columns: repeat(4, auto);
+      gap: 16px;
+      align-items: center;
+    }
+
+    .stat-item {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+      padding-right: 14px;
+      border-right: 1px solid rgba(255, 255, 255, 0.1);
+    }
+
+    .stat-item:last-child {
+      padding-right: 0;
+      border-right: none;
+    }
+
+    .stat-label {
+      font-size: 10.5px;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--text-dim);
+    }
+
+    .stat-value {
+      font-family: var(--font-mono);
+      font-size: 16px;
+      font-weight: 700;
+      color: var(--accent-gold);
+    }
+
+    .stat-unit {
+      font-size: 11px;
+      color: var(--text-dim);
+      font-weight: 400;
+    }
+
+    /* Toast Notification Banner */
+    #event-toast {
+      align-self: center;
+      padding: 8px 18px;
+      border-radius: 999px;
+      background: rgba(14, 34, 52, 0.85);
+      border: 1px solid rgba(240, 191, 89, 0.5);
+      color: var(--accent-gold);
+      font-size: 13px;
+      font-weight: 600;
+      letter-spacing: 0.03em;
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+      opacity: 0;
+      transform: translateY(-10px);
+      transition: opacity 0.25s ease, transform 0.25s ease;
+      pointer-events: none;
+    }
+
+    #event-toast.visible {
+      opacity: 1;
+      transform: translateY(0);
+    }
+
+    /* Bottom Control Dock */
+    .bottom-bar {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-end;
+      gap: 16px;
+      flex-wrap: wrap;
+    }
+
+    .controls-dock {
+      padding: 14px 18px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      max-width: 780px;
+    }
+
+    .control-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    .row-label {
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--accent-gold);
+      min-width: 68px;
+    }
+
+    .btn {
+      appearance: none;
+      border: 1px solid rgba(255, 255, 255, 0.16);
+      background: rgba(255, 255, 255, 0.07);
+      color: var(--text-main);
+      padding: 7px 13px;
+      border-radius: 10px;
+      font-size: 12.5px;
+      font-weight: 600;
+      font-family: var(--font-sans);
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      transition: all 0.18s ease;
+    }
+
+    .btn:hover {
+      background: rgba(255, 255, 255, 0.15);
+      border-color: var(--accent-gold);
+      transform: translateY(-1px);
+    }
+
+    .btn:active {
+      transform: translateY(1px);
+    }
+
+    .btn.active {
+      background: linear-gradient(135deg, rgba(230, 46, 61, 0.88), rgba(255, 107, 61, 0.88));
+      border-color: var(--accent-gold);
+      color: #fff;
+      box-shadow: 0 4px 14px rgba(230, 46, 61, 0.38);
+    }
+
+    .btn.action-btn {
+      background: linear-gradient(135deg, rgba(240, 191, 89, 0.22), rgba(255, 107, 61, 0.22));
+      border-color: rgba(240, 191, 89, 0.48);
+    }
+
+    .btn.action-btn:hover {
+      background: linear-gradient(135deg, rgba(240, 191, 89, 0.38), rgba(255, 107, 61, 0.38));
+    }
+
+    .kbd {
+      font-family: var(--font-mono);
+      font-size: 10px;
+      padding: 1px 5px;
+      border-radius: 4px;
+      background: rgba(0, 0, 0, 0.36);
+      color: var(--accent-gold);
+      border: 1px solid rgba(255, 255, 255, 0.12);
+    }
+
+    /* Sliders */
+    .slider-group {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      background: rgba(0, 0, 0, 0.22);
+      padding: 5px 11px;
+      border-radius: 10px;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+    }
+
+    .slider-group label {
+      font-size: 11.5px;
+      color: var(--text-dim);
+      white-space: nowrap;
+    }
+
+    input[type="range"] {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 96px;
+      height: 5px;
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.2);
+      outline: none;
+      cursor: pointer;
+    }
+
+    input[type="range"]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 15px;
+      height: 15px;
+      border-radius: 50%;
+      background: var(--accent-gold);
+      border: 2px solid #fff;
+      box-shadow: 0 2px 6px rgba(0, 0, 0, 0.4);
+    }
+
+    /* Right Side Quick Help & HUD Toggle */
+    .side-controls {
+      display: flex;
+      flex-direction: column;
+      align-items: flex-end;
+      gap: 10px;
+    }
+
+    .help-card {
+      padding: 12px 16px;
+      font-size: 11.5px;
+      color: var(--text-dim);
+      line-height: 1.65;
+      max-width: 270px;
+    }
+
+    .help-card strong {
+      color: var(--accent-gold);
+    }
+
+    #toggle-hud-btn {
+      pointer-events: auto;
+      position: fixed;
+      bottom: 20px;
+      right: 24px;
+      z-index: 20;
+    }
+
+    @media (max-width: 860px) {
+      #hud {
+        padding: 12px;
+      }
+      .telemetry-card {
+        grid-template-columns: repeat(2, auto);
+        gap: 10px 16px;
+      }
+      .help-card {
+        display: none;
+      }
+      .brand-title {
+        font-size: 18px;
+      }
+    }
+  </style>
+
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+        "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+      }
+    }
+  </script>
+</head>
+<body>
+  <div id="webgl-container"></div>
+  <div class="vignette"></div>
+
+  <div id="hud">
+    <div class="top-bar">
+      <div class="hud-panel brand-card">
+        <div class="badge-row">
+          <span class="badge-tag">Role Reversal 3D</span>
+          <span class="badge-sub">PROCEDURAL THREE.JS</span>
+        </div>
+        <h1 class="brand-title">一辆自行车正在骑鹈鹕</h1>
+        <p class="brand-desc">
+          复古红色公路车端坐于巨型海湾鹈鹕背鞍之上，车把紧握连向长喙的皮缰绳，曲柄踏板踩入马镫催动鹈鹕沿栈道狂奔。点击模型或使用下方控制台实时互动。
+        </p>
+      </div>
+
+      <div class="hud-panel telemetry-card">
+        <div class="stat-item">
+          <span class="stat-label">巡航速度</span>
+          <span class="stat-value"><span id="stat-speed">28.4</span> <span class="stat-unit">km/h</span></span>
+        </div>
+        <div class="stat-item">
+          <span class="stat-label">齿轮踏频</span>
+          <span class="stat-value"><span id="stat-rpm">92</span> <span class="stat-unit">RPM</span></span>
+        </div>
+        <div class="stat-item">
+          <span class="stat-label">喉囊吞鱼</span>
+          <span class="stat-value"><span id="stat-fish">0</span> <span class="stat-unit">条</span></span>
+        </div>
+        <div class="stat-item">
+          <span class="stat-label">骑行姿态</span>
+          <span class="stat-value" id="stat-mode">疾风小跑</span>
+        </div>
+      </div>
+    </div>
+
+    <div id="event-toast">叮铃铃！自行车骑士拉紧缰绳向鹈鹕发出加速指令！</div>
+
+    <div class="bottom-bar">
+      <div class="hud-panel controls-dock">
+        <div class="control-row">
+          <span class="row-label">步态模式</span>
+          <button class="btn" data-gait="stroll">悠闲漫步 <span class="kbd">1</span></button>
+          <button class="btn active" data-gait="gallop">疾风冲刺 <span class="kbd">2</span></button>
+          <button class="btn" data-gait="flight">贴海滑翔 <span class="kbd">3</span></button>
+
+          <div class="slider-group">
+            <label for="speed-slider">速率</label>
+            <input type="range" id="speed-slider" min="0.2" max="2.6" step="0.05" value="1.2" />
+          </div>
+          <div class="slider-group">
+            <label for="steer-slider">转向</label>
+            <input type="range" id="steer-slider" min="-1" max="1" step="0.02" value="0" />
+          </div>
+        </div>
+
+        <div class="control-row">
+          <span class="row-label">特技互动</span>
+          <button class="btn action-btn" id="btn-fish">投喂飞鱼 <span class="kbd">F</span></button>
+          <button class="btn action-btn" id="btn-bell">按响车铃 <span class="kbd">B</span></button>
+          <button class="btn action-btn" id="btn-jump">腾空兔跳 <span class="kbd">Space</span></button>
+          <button class="btn" id="btn-lamp">黄铜车灯 <span class="kbd">L</span></button>
+          <button class="btn" id="btn-audio">音效: 开 <span class="kbd">M</span></button>
+        </div>
+
+        <div class="control-row">
+          <span class="row-label">镜头与天色</span>
+          <button class="btn active" data-cam="hero">经典侧视 <span class="kbd">C</span></button>
+          <button class="btn" data-cam="front">迎面特写</button>
+          <button class="btn" data-cam="pov">自行车第一视角</button>
+          <button class="btn" data-cam="orbit">自由环绕</button>
+          <button class="btn" id="btn-time">天色: 晴空正午 <span class="kbd">T</span></button>
+        </div>
+      </div>
+
+      <div class="side-controls">
+        <div class="hud-panel help-card">
+          <div><strong>鼠标拖拽 / 滚轮：</strong>360° 旋转与缩放视角</div>
+          <div><strong>点击 3D 部件：</strong>点车铃振铃、点大嘴喂鱼、点翅膀扇翼</div>
+          <div><strong>键盘方向键 / A D：</strong>控制自行车把拉扯缰绳左右转向</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <button class="btn hud-panel" id="toggle-hud-btn">隐藏界面 <span class="kbd">H</span></button>
+
+  <script type="module">
+    import * as THREE from 'three';
+    import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+    // =========================================================================
+    // 1. PROCEDURAL DATA TEXTURES (Pure Math RGBA Uint8Array, ZERO 2D Canvas!)
+    // =========================================================================
+    function createFeatherDataTexture() {
+      const width = 128;
+      const height = 128;
+      const data = new Uint8Array(width * height * 4);
+      for (let y = 0; y < height; y++) {
+        for (let x = 0; x < width; x++) {
+          const idx = (y * width + x) * 4;
+          const row = Math.floor(y / 16);
+          const offsetX = (x + (row % 2) * 8) % 16;
+          const localY = y % 16;
+          const dx = (offsetX - 8) / 8;
+          const dy = (localY - 8) / 8;
+          const scallop = Math.sqrt(dx * dx + dy * dy);
+          const thebarb = Math.sin((x + y * 0.5) * 0.9) * 8;
+          const val = Math.max(210, Math.min(255, Math.floor(245 - scallop * 22 + thebarb)));
+          data[idx] = val;
+          data[idx + 1] = val - 2;
+          data[idx + 2] = val - 6;
+          data[idx + 3] = 255;
+        }
+      }
+      const tex = new THREE.DataTexture(data, width, height, THREE.RGBAFormat);
+      tex.wrapS = THREE.RepeatWrapping;
+      tex.wrapT = THREE.RepeatWrapping;
+      tex.repeat.set(4, 4);
+      tex.needsUpdate = true;
+      return tex;
+    }
+
+    function createWoodDataTexture() {
+      const width = 256;
+      const height = 256;
+      const data = new Uint8Array(width * height * 4);
+      for (let y = 0; y < height; y++) {
+        for (let x = 0; x < width; x++) {
+          const idx = (y * width + x) * 4;
+          const plankGap = (y % 32 < 2) || (x % 128 < 2 && ((Math.floor(y / 32) % 2) === Math.floor(x / 128)));
+          const grain = Math.sin(x * 0.15 + Math.sin(y * 0.45) * 2.5) * 14 + Math.cos(y * 0.8) * 6;
+          const plankTone = ((Math.floor(y / 32) * 17) % 18) - 9;
+          if (plankGap) {
+            data[idx] = 42;
+            data[idx + 1] = 28;
+            data[idx + 2] = 18;
+            data[idx + 3] = 255;
+          } else {
+            data[idx] = Math.min(255, Math.max(0, 152 + grain + plankTone));
+            data[idx + 1] = Math.min(255, Math.max(0, 108 + grain * 0.8 + plankTone));
+            data[idx + 2] = Math.min(255, Math.max(0, 68 + grain * 0.6 + plankTone));
+            data[idx + 3] = 255;
+          }
+        }
+      }
+      const tex = new THREE.DataTexture(data, width, height, THREE.RGBAFormat);
+      tex.wrapS = THREE.RepeatWrapping;
+      tex.wrapT = THREE.RepeatWrapping;
+      tex.repeat.set(6, 14);
+      tex.colorSpace = THREE.SRGBColorSpace;
+      tex.needsUpdate = true;
+      return tex;
+    }
+
+    function createTireDataTexture() {
+      const width = 64;
+      const height = 64;
+      const data = new Uint8Array(width * height * 4);
+      for (let y = 0; y < height; y++) {
+        for (let x = 0; x < width; x++) {
+          const idx = (y * width + x) * 4;
+          const chevron = ((x + Math.abs(y - 32)) % 8) < 4 ? 38 : 22;
+          data[idx] = chevron;
+          data[idx + 1] = chevron;
+          data[idx + 2] = chevron + 3;
+          data[idx + 3] = 255;
+        }
+      }
+      const tex = new THREE.DataTexture(data, width, height, THREE.RGBAFormat);
+      tex.wrapS = THREE.RepeatWrapping;
+      tex.wrapT = THREE.RepeatWrapping;
+      tex.repeat.set(24, 2);
+      tex.needsUpdate = true;
+      return tex;
+    }
+
+    function createLeatherDataTexture() {
+      const width = 64;
+      const height = 64;
+      const data = new Uint8Array(width * height * 4);
+      for (let y = 0; y < height; y++) {
+        for (let x = 0; x < width; x++) {
+          const idx = (y * width + x) * 4;
+          const hash = ((x * 73856093) ^ (y * 19349663)) & 15;
+          data[idx] = 105 + hash;
+          data[idx + 1] = 54 + Math.floor(hash * 0.6);
+          data[idx + 2] = 26 + Math.floor(hash * 0.3);
+          data[idx + 3] = 255;
+        }
+      }
+      const tex = new THREE.DataTexture(data, width, height, THREE.RGBAFormat);
+      tex.wrapS = THREE.RepeatWrapping;
+      tex.wrapT = THREE.RepeatWrapping;
+      tex.repeat.set(4, 4);
+      tex.colorSpace = THREE.SRGBColorSpace;
+      tex.needsUpdate = true;
+      return tex;
+    }
+
+    // =========================================================================
+    // 2. PROCEDURAL WEB AUDIO SYNTHESIZER (Bell, Pelican Gulp, Freewheel Click)
+    // =========================================================================
+    class SoundEngine {
+      constructor() {
+        this.ctx = null;
+        this.enabled = true;
+      }
+
+      init() {
+        if (!this.ctx && typeof window !== 'undefined') {
+          const AudioCtx = window.AudioContext || window.webkitAudioContext;
+          if (AudioCtx) {
+            this.ctx = new AudioCtx();
+          }
+        }
+        if (this.ctx && this.ctx.state === 'suspended') {
+          this.ctx.resume();
+        }
+      }
+
+      playBikeBell() {
+        if (!this.enabled) return;
+        this.init();
+        if (!this.ctx) return;
+        const now = this.ctx.currentTime;
+        // Classic dual-strike mechanical bicycle bell ("Briiiing-ring!")
+        const strikes = [0, 0.055, 0.11, 0.24, 0.295];
+        strikes.forEach((offset, i) => {
+          const osc1 = this.ctx.createOscillator();
+          const osc2 = this.ctx.createOscillator();
+          const gain = this.ctx.createGain();
+          osc1.type = 'sine';
+          osc2.type = 'triangle';
+          osc1.frequency.setValueAtTime(i < 3 ? 2120 : 2480, now + offset);
+          osc2.frequency.setValueAtTime(i < 3 ? 3185 : 3720, now + offset);
+
+          gain.gain.setValueAtTime(0.001, now + offset);
+          gain.gain.exponentialRampToValueAtTime(0.14, now + offset + 0.008);
+          gain.gain.exponentialRampToValueAtTime(0.0008, now + offset + 0.55);
+
+          osc1.connect(gain);
+          osc2.connect(gain);
+          gain.connect(this.ctx.destination);
+          osc1.start(now + offset);
+          osc2.start(now + offset);
+          osc1.stop(now + offset + 0.56);
+          osc2.stop(now + offset + 0.56);
+        });
+      }
+
+      playPelicanGulp() {
+        if (!this.enabled) return;
+        this.init();
+        if (!this.ctx) return;
+        const now = this.ctx.currentTime;
+        const osc = this.ctx.createOscillator();
+        const gain = this.ctx.createGain();
+        osc.type = 'sawtooth';
+        osc.frequency.setValueAtTime(340, now);
+        osc.frequency.exponentialRampToValueAtTime(160, now + 0.14);
+        osc.frequency.exponentialRampToValueAtTime(490, now + 0.28);
+
+        gain.gain.setValueAtTime(0.001, now);
+        gain.gain.linearRampToValueAtTime(0.1, now + 0.03);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.32);
+
+        osc.connect(gain);
+        gain.connect(this.ctx.destination);
+        osc.start(now);
+        osc.stop(now + 0.34);
+      }
+
+      playJumpWhoosh() {
+        if (!this.enabled) return;
+        this.init();
+        if (!this.ctx) return;
+        const now = this.ctx.currentTime;
+        const osc = this.ctx.createOscillator();
+        const gain = this.ctx.createGain();
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(180, now);
+        osc.frequency.exponentialRampToValueAtTime(620, now + 0.25);
+        osc.frequency.exponentialRampToValueAtTime(240, now + 0.55);
+
+        gain.gain.setValueAtTime(0.001, now);
+        gain.gain.linearRampToValueAtTime(0.12, now + 0.08);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.56);
+
+        osc.connect(gain);
+        gain.connect(this.ctx.destination);
+        osc.start(now);
+        osc.stop(now + 0.58);
+      }
+    }
+
+    const sound = new SoundEngine();
+
+    // =========================================================================
+    // 3. SCENE, RENDERER, CAMERA & LIGHTING INITIALIZATION
+    // =========================================================================
+    const container = document.getElementById('webgl-container');
+    const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    renderer.shadowMap.enabled = true;
+    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    renderer.toneMappingExposure = 1.12;
+    container.appendChild(renderer.domElement);
+
+    const scene = new THREE.Scene();
+    scene.fog = new THREE.FogExp2(0x8fd3f4, 0.011);
+
+    const camera = new THREE.PerspectiveCamera(44, window.innerWidth / window.innerHeight, 0.1, 220);
+    camera.position.set(6.8, 4.1, 6.2);
+
+    const controls = new OrbitControls(camera, renderer.domElement);
+    controls.enableDamping = true;
+    controls.dampingFactor = 0.06;
+    controls.maxPolarAngle = Math.PI * 0.485;
+    controls.minDistance = 2.8;
+    controls.maxDistance = 26;
+    controls.target.set(0, 2.55, 0.35);
+
+    // Lighting Rig
+    const hemiLight = new THREE.HemisphereLight(0xdff4ff, 0xffe0b2, 0.95);
+    hemiLight.position.set(0, 30, 0);
+    scene.add(hemiLight);
+
+    const dirLight = new THREE.DirectionalLight(0xfff5e4, 2.35);
+    dirLight.position.set(14, 22, 12);
+    dirLight.castShadow = true;
+    dirLight.shadow.mapSize.width = 2048;
+    dirLight.shadow.mapSize.height = 2048;
+    dirLight.shadow.camera.near = 2;
+    dirLight.shadow.camera.far = 55;
+    const d = 12;
+    dirLight.shadow.camera.left = -d;
+    dirLight.shadow.camera.right = d;
+    dirLight.shadow.camera.top = d;
+    dirLight.shadow.camera.bottom = -d;
+    dirLight.shadow.bias = -0.0005;
+    scene.add(dirLight);
+
+    const rimLight = new THREE.DirectionalLight(0x6dd5fa, 0.85);
+    rimLight.position.set(-12, 8, -10);
+    scene.add(rimLight);
+
+    // =========================================================================
+    // 4. SHARED MATERIALS LIBRARY
+    // =========================================================================
+    const featherTex = createFeatherDataTexture();
+    const woodTex = createWoodDataTexture();
+    const tireTex = createTireDataTexture();
+    const leatherTex = createLeatherDataTexture();
+
+    const mats = {
+      pelicanWhite: new THREE.MeshStandardMaterial({
+        color: 0xfbf8f1,
+        roughness: 0.62,
+        metalness: 0.02,
+        bumpMap: featherTex,
+        bumpScale: 0.025
+      }),
+      pelicanCream: new THREE.MeshStandardMaterial({
+        color: 0xf3ead8,
+        roughness: 0.68,
+        bumpMap: featherTex,
+        bumpScale: 0.02
+      }),
+      wingTipDark: new THREE.MeshStandardMaterial({
+        color: 0x262d38,
+        roughness: 0.55,
+        metalness: 0.08
+      }),
+      beakOrange: new THREE.MeshStandardMaterial({
+        color: 0xff7b24,
+        roughness: 0.32,
+        metalness: 0.05
+      }),
+      beakTipRed: new THREE.MeshStandardMaterial({
+        color: 0xe63928,
+        roughness: 0.28
+      }),
+      pouchAmber: new THREE.MeshPhysicalMaterial({
+        color: 0xffa62b,
+        roughness: 0.42,
+        metalness: 0.02,
+        clearcoat: 0.25,
+        sheen: 0.5,
+        sheenColor: new THREE.Color(0xffd166),
+        side: THREE.DoubleSide
+      }),
+      webbedFootOrange: new THREE.MeshStandardMaterial({
+        color: 0xf96918,
+        roughness: 0.45
+      }),
+      saddleLeather: new THREE.MeshStandardMaterial({
+        color: 0x6e3819,
+        map: leatherTex,
+        roughness: 0.52,
+        metalness: 0.06
+      }),
+      darkLeather: new THREE.MeshStandardMaterial({
+        color: 0x3b1f10,
+        roughness: 0.46
+      }),
+      bikeFrameCrimson: new THREE.MeshPhysicalMaterial({
+        color: 0xd91e36,
+        metalness: 0.45,
+        roughness: 0.18,
+        clearcoat: 0.9,
+        clearcoatRoughness: 0.1
+      }),
+      chrome: new THREE.MeshStandardMaterial({
+        color: 0xeef3f7,
+        metalness: 0.92,
+        roughness: 0.12
+      }),
+      brass: new THREE.MeshStandardMaterial({
+        color: 0xf2be4b,
+        metalness: 0.85,
+        roughness: 0.2
+      }),
+      tireRubber: new THREE.MeshStandardMaterial({
+        color: 0x22252a,
+        bumpMap: tireTex,
+        bumpScale: 0.04,
+        roughness: 0.82,
+        metalness: 0.05
+      }),
+      scarfSilk: new THREE.MeshStandardMaterial({
+        color: 0x00d2b8,
+        roughness: 0.35,
+        emissive: 0x003830,
+        side: THREE.DoubleSide
+      }),
+      headlampGlow: new THREE.MeshBasicMaterial({
+        color: 0xfff3b0
+      }),
+      goggleGlass: new THREE.MeshPhysicalMaterial({
+        color: 0x38bdf8,
+        metalness: 0.15,
+        roughness: 0.08,
+        transmission: 0.45,
+        transparent: true,
+        opacity: 0.88
+      }),
+      eyeWhite: new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.2 }),
+      eyePupil: new THREE.MeshStandardMaterial({ color: 0x11161d, roughness: 0.1 }),
+      fishSilver: new THREE.MeshStandardMaterial({
+        color: 0x7dd3fc,
+        metalness: 0.78,
+        roughness: 0.2
+      })
+    };
+
+    // =========================================================================
+    // 5. PROCEDURAL COASTAL ENVIRONMENT (Sky Shader, Ocean Waves, Boardwalk)
+    // =========================================================================
+    const envGroup = new THREE.Group();
+    scene.add(envGroup);
+
+    // 5.1 Procedural Sky Dome Shader
+    const skyGeo = new THREE.SphereGeometry(140, 32, 24);
+    const skyUniforms = {
+      topColor: { value: new THREE.Color(0x1d70b8) },
+      horizonColor: { value: new THREE.Color(0xb5ebff) },
+      bottomColor: { value: new THREE.Color(0xffe9c6) }
+    };
+    const skyMat = new THREE.ShaderMaterial({
+      uniforms: skyUniforms,
+      side: THREE.BackSide,
+      depthWrite: false,
+      vertexShader: `
+        varying vec3 vWorldPos;
+        void main() {
+          vec4 wp = modelMatrix * vec4(position, 1.0);
+          vWorldPos = wp.xyz;
+          gl_Position = projectionMatrix * viewMatrix * wp;
+        }
+      `,
+      fragmentShader: `
+        uniform vec3 topColor;
+        uniform vec3 horizonColor;
+        uniform vec3 bottomColor;
+        varying vec3 vWorldPos;
+        void main() {
+          float h = normalize(vWorldPos).y;
+          vec3 col = mix(horizonColor, topColor, max(pow(max(h, 0.0), 0.55), 0.0));
+          col = mix(col, bottomColor, max(pow(max(-h, 0.0), 0.5), 0.0));
+          gl_FragColor = vec4(col, 1.0);
+        }
+      `
+    });
+    const skyDome = new THREE.Mesh(skyGeo, skyMat);
+    envGroup.add(skyDome);
+
+    // Sun / Moon Celestial Body
+    const sunGroup = new THREE.Group();
+    const sunMesh = new THREE.Mesh(
+      new THREE.SphereGeometry(5.2, 24, 24),
+      new THREE.MeshBasicMaterial({ color: 0xfff3b8 })
+    );
+    const sunHalo = new THREE.Mesh(
+      new THREE.SphereGeometry(7.6, 24, 24),
+      new THREE.MeshBasicMaterial({ color: 0xffd166, transparent: true, opacity: 0.25 })
+    );
+    sunGroup.add(sunMesh, sunHalo);
+    sunGroup.position.set(38, 36, -55);
+    envGroup.add(sunGroup);
+
+    // 5.2 Boardwalk Pier (Scrolling Timber Deck + Posts + Rope + Lanterns)
+    const boardwalkWidth = 6.2;
+    const boardwalkLength = 96;
+    const deckGeo = new THREE.BoxGeometry(boardwalkWidth, 0.36, boardwalkLength, 1, 1, 1);
+    const deckMat = new THREE.MeshStandardMaterial({
+      map: woodTex,
+      roughness: 0.78,
+      metalness: 0.04
+    });
+    const deckMesh = new THREE.Mesh(deckGeo, deckMat);
+    deckMesh.position.set(0, -0.18, 0);
+    deckMesh.receiveShadow = true;
+    envGroup.add(deckMesh);
+
+    // Side Curbs
+    const curbMat = new THREE.MeshStandardMaterial({ color: 0x5c3c24, roughness: 0.8 });
+    [-boardwalkWidth * 0.5 + 0.16, boardwalkWidth * 0.5 - 0.16].forEach((xPos) => {
+      const curb = new THREE.Mesh(new THREE.BoxGeometry(0.28, 0.16, boardwalkLength), curbMat);
+      curb.position.set(xPos, 0.08, 0);
+      curb.receiveShadow = true;
+      curb.castShadow = true;
+      envGroup.add(curb);
+    });
+
+    // Scrolling Pier Bollards & Lanterns
+    const pierSegments = [];
+    const pierSpacing = 8;
+    const numPierPairs = 12;
+    const lanternGlowMeshes = [];
+    const postGeo = new THREE.CylinderGeometry(0.18, 0.21, 3.6, 12);
+    const capGeo = new THREE.ConeGeometry(0.26, 0.22, 12);
+    const ropeGeo = new THREE.CylinderGeometry(0.035, 0.035, pierSpacing, 8);
+    ropeGeo.rotateX(Math.PI * 0.5);
+    const ropeMat = new THREE.MeshStandardMaterial({ color: 0xd8b886, roughness: 0.88 });
+
+    for (let i = 0; i < numPierPairs; i++) {
+      const seg = new THREE.Group();
+      const zPos = (i - numPierPairs * 0.5) * pierSpacing;
+      seg.position.z = zPos;
+
+      [-1, 1].forEach((side) => {
+        const xEdge = side * (boardwalkWidth * 0.5 + 0.05);
+        const post = new THREE.Mesh(postGeo, curbMat);
+        post.position.set(xEdge, -0.45, 0);
+        post.castShadow = true;
+        post.receiveShadow = true;
+        seg.add(post);
+
+        const cap = new THREE.Mesh(capGeo, mats.brass);
+        cap.position.set(xEdge, 1.45, 0);
+        seg.add(cap);
+
+        const rope = new THREE.Mesh(ropeGeo, ropeMat);
+        rope.position.set(xEdge, 0.95, pierSpacing * 0.5);
+        seg.add(rope);
+
+        // Pier Lantern on every second bollard
+        if (i % 2 === 0) {
+          const arm = new THREE.Mesh(new THREE.BoxGeometry(0.35 * side, 0.06, 0.06), mats.darkLeather);
+          arm.position.set(xEdge - 0.16 * side, 1.28, 0);
+          seg.add(arm);
+
+          const lanternBulb = new THREE.Mesh(
+            new THREE.SphereGeometry(0.13, 12, 12),
+            new THREE.MeshBasicMaterial({ color: 0xffe49e })
+          );
+          lanternBulb.position.set(xEdge - 0.3 * side, 1.14, 0);
+          seg.add(lanternBulb);
+          lanternGlowMeshes.push(lanternBulb);
+        }
+      });
+
+      envGroup.add(seg);
+      pierSegments.push(seg);
+    }
+
+    // 5.3 Dynamic Animated Ocean Water Surface
+    const waterGeo = new THREE.PlaneGeometry(180, 180, 72, 72);
+    waterGeo.rotateX(-Math.PI * 0.5);
+    const waterPosAttr = waterGeo.attributes.position;
+    const waterBaseCoords = new Float32Array(waterPosAttr.count * 2);
+    for (let i = 0; i < waterPosAttr.count; i++) {
+      waterBaseCoords[i * 2] = waterPosAttr.getX(i);
+      waterBaseCoords[i * 2 + 1] = waterPosAttr.getZ(i);
+    }
+    const waterMat = new THREE.MeshPhysicalMaterial({
+      color: 0x0f7aa8,
+      roughness: 0.18,
+      metalness: 0.12,
+      clearcoat: 0.85,
+      clearcoatRoughness: 0.15,
+      flatShading: true
+    });
+    const waterMesh = new THREE.Mesh(waterGeo, waterMat);
+    waterMesh.position.y = -1.65;
+    waterMesh.receiveShadow = true;
+    envGroup.add(waterMesh);
+
+    // 5.4 Floating Maritime Buoys & Coastal Rocks
+    const buoys = [];
+    for (let i = 0; i < 8; i++) {
+      const buoy = new THREE.Group();
+      const side = i % 2 === 0 ? -1 : 1;
+      buoy.position.set(side * (9 + (i % 3) * 5.5), -1.55, (i - 4) * 14);
+      const floatBase = new THREE.Mesh(new THREE.CylinderGeometry(0.55, 0.72, 0.7, 16), mats.beakTipRed);
+      const stripe = new THREE.Mesh(new THREE.CylinderGeometry(0.45, 0.54, 0.45, 16), mats.pelicanWhite);
+      stripe.position.y = 0.52;
+      const beacon = new THREE.Mesh(new THREE.SphereGeometry(0.14, 10, 10), mats.headlampGlow);
+      beacon.position.y = 0.92;
+      buoy.add(floatBase, stripe, beacon);
+      envGroup.add(buoy);
+      buoys.push({ group: buoy, phase: i * 1.3 });
+    }
+
+    // 5.5 Fluffy 3D Procedural Clouds
+    const clouds = [];
+    const cloudMat = new THREE.MeshStandardMaterial({
+      color: 0xffffff,
+      roughness: 0.9,
+      metalness: 0.0
+    });
+    for (let i = 0; i < 12; i++) {
+      const cloud = new THREE.Group();
+      const puffCount = 4 + (i % 3);
+      for (let p = 0; p < puffCount; p++) {
+        const r = 1.4 + ((i + p) % 3) * 0.65;
+        const puff = new THREE.Mesh(new THREE.SphereGeometry(r, 14, 12), cloudMat);
+        puff.position.set((p - puffCount * 0.5) * 1.45, (p % 2) * 0.4, ((p * 3) % 2 - 0.5) * 0.6);
+        puff.scale.y = 0.68;
+        cloud.add(puff);
+      }
+      cloud.position.set((i % 2 === 0 ? -1 : 1) * (12 + (i * 5) % 28), 13 + (i % 4) * 3.5, (i - 6) * 16);
+      envGroup.add(cloud);
+      clouds.push({ group: cloud, speed: 0.6 + (i % 4) * 0.25 });
+    }
+
+    // =========================================================================
+    // 6. MAIN CHARACTER ROOT: PELICAN (THE MOUNT) + BICYCLE (THE RIDER)
+    // =========================================================================
+    const characterRoot = new THREE.Group();
+    scene.add(characterRoot);
+
+    const interactiveTargets = []; // For raycasting clicks
+
+    // -------------------------------------------------------------------------
+    // 6A. THE MOUNT: GIANT GREAT WHITE PELICAN (巨型海湾鹈鹕坐骑)
+    // -------------------------------------------------------------------------
+    const pelicanGroup = new THREE.Group();
+    characterRoot.add(pelicanGroup);
+
+    const pelicanBodyPivot = new THREE.Group();
+    pelicanBodyPivot.position.set(0, 2.08, 0);
+    pelicanGroup.add(pelicanBodyPivot);
+
+    // Plump Sculpted Torso
+    const torsoGeo = new THREE.SphereGeometry(1.0, 28, 24);
+    torsoGeo.scale(0.92, 0.84, 1.46);
+    const torsoMesh = new THREE.Mesh(torsoGeo, mats.pelicanWhite);
+    torsoMesh.rotation.x = -0.1;
+    torsoMesh.castShadow = true;
+    torsoMesh.receiveShadow = true;
+    torsoMesh.userData.interactType = 'pelicanBody';
+    pelicanBodyPivot.add(torsoMesh);
+    interactiveTargets.push(torsoMesh);
+
+    // Broad Proud Chest
+    const chestGeo = new THREE.SphereGeometry(0.8, 24, 20);
+    chestGeo.scale(0.96, 0.88, 0.95);
+    const chestMesh = new THREE.Mesh(chestGeo, mats.pelicanCream);
+    chestMesh.position.set(0, 0.08, 0.78);
+    chestMesh.castShadow = true;
+    pelicanBodyPivot.add(chestMesh);
+
+    // Articulated Fanned Tail
+    const tailPivot = new THREE.Group();
+    tailPivot.position.set(0, 0.14, -1.32);
+    pelicanBodyPivot.add(tailPivot);
+    for (let t = -3; t <= 3; t++) {
+      const feather = new THREE.Mesh(
+        new THREE.ConeGeometry(0.14, 0.78, 8),
+        Math.abs(t) === 3 ? mats.wingTipDark : mats.pelicanWhite
+      );
+      feather.rotation.x = -Math.PI * 0.42;
+      feather.rotation.z = t * 0.14;
+      feather.position.set(t * 0.09, 0.05, -0.26);
+      feather.scale.set(1.0, 1.0, 0.32);
+      feather.castShadow = true;
+      tailPivot.add(feather);
+    }
+
+    // Multi-Jointed Wings (Left & Right: Shoulder -> Elbow -> Layered Feathers)
+    function createPelicanWing(side) {
+      const wingRoot = new THREE.Group();
+      wingRoot.position.set(side * 0.82, 0.24, 0.16);
+
+      // Inner Wing (Humerus/Radius section)
+      const shoulderPivot = new THREE.Group();
+      wingRoot.add(shoulderPivot);
+
+      const innerWingMesh = new THREE.Mesh(
+        new THREE.BoxGeometry(0.68, 0.16, 1.12),
+        mats.pelicanWhite
+      );
+      innerWingMesh.position.set(side * 0.28, -0.04, -0.18);
+      innerWingMesh.rotation.z = -side * 0.25;
+      innerWingMesh.castShadow = true;
+      innerWingMesh.userData.interactType = 'wing';
+      shoulderPivot.add(innerWingMesh);
+      interactiveTargets.push(innerWingMesh);
+
+      // Secondary White Covert Feathers
+      for (let f = 0; f < 6; f++) {
+        const secFeather = new THREE.Mesh(
+          new THREE.BoxGeometry(0.55, 0.05, 0.22),
+          mats.pelicanCream
+        );
+        secFeather.position.set(side * 0.36, -0.08, 0.22 - f * 0.18);
+        secFeather.rotation.y = side * 0.18;
+        secFeather.castShadow = true;
+        shoulderPivot.add(secFeather);
+      }
+
+      // Outer Wing Pivot (Primary Flight Feathers in signature dark charcoal)
+      const elbowPivot = new THREE.Group();
+      elbowPivot.position.set(side * 0.56, -0.1, -0.12);
+      shoulderPivot.add(elbowPivot);
+
+      for (let p = 0; p < 8; p++) {
+        const priGroup = new THREE.Group();
+        priGroup.position.set(side * (0.12 + p * 0.07), 0, 0.18 - p * 0.14);
+        priGroup.rotation.y = -side * (0.12 + p * 0.06);
+
+        const priBase = new THREE.Mesh(new THREE.BoxGeometry(0.45, 0.045, 0.16), mats.pelicanWhite);
+        priBase.position.x = side * 0.18;
+        const priTip = new THREE.Mesh(new THREE.BoxGeometry(0.56, 0.04, 0.15), mats.wingTipDark);
+        priTip.position.x = side * 0.58;
+        priTip.castShadow = true;
+        priTip.userData.interactType = 'wing';
+        interactiveTargets.push(priTip);
+
+        priGroup.add(priBase, priTip);
+        elbowPivot.add(priGroup);
+      }
+
+      return { wingRoot, shoulderPivot, elbowPivot };
+    }
+
+    const leftWing = createPelicanWing(1);
+    const rightWing = createPelicanWing(-1);
+    pelicanBodyPivot.add(leftWing.wingRoot, rightWing.wingRoot);
+
+    // S-Curved Articulated Neck, Head, Aviator Cap & Giant Beak/Throat Pouch
+    const neckBasePivot = new THREE.Group();
+    neckBasePivot.position.set(0, 0.36, 1.06);
+    pelicanBodyPivot.add(neckBasePivot);
+
+    const neckLowerMesh = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.30, 0.38, 0.72, 18),
+      mats.pelicanWhite
+    );
+    neckLowerMesh.position.set(0, 0.28, 0.08);
+    neckLowerMesh.rotation.x = 0.24;
+    neckLowerMesh.castShadow = true;
+    neckBasePivot.add(neckLowerMesh);
+
+    const neckMidPivot = new THREE.Group();
+    neckMidPivot.position.set(0, 0.56, 0.16);
+    neckBasePivot.add(neckMidPivot);
+
+    const neckUpperMesh = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.26, 0.30, 0.66, 18),
+      mats.pelicanWhite
+    );
+    neckUpperMesh.position.set(0, 0.28, -0.04);
+    neckUpperMesh.rotation.x = -0.18;
+    neckUpperMesh.castShadow = true;
+    neckMidPivot.add(neckUpperMesh);
+
+    const headPivot = new THREE.Group();
+    headPivot.position.set(0, 0.58, -0.08);
+    neckMidPivot.add(headPivot);
+
+    // Head Skull & Crest Feathers
+    const headGeo = new THREE.SphereGeometry(0.38, 22, 18);
+    headGeo.scale(0.95, 0.92, 1.12);
+    const headMesh = new THREE.Mesh(headGeo, mats.pelicanWhite);
+    headMesh.castShadow = true;
+    headPivot.add(headMesh);
+
+    for (let c = 0; c < 4; c++) {
+      const crest = new THREE.Mesh(new THREE.ConeGeometry(0.06, 0.32, 8), mats.pelicanCream);
+      crest.position.set(0, 0.26 - c * 0.04, -0.34 - c * 0.04);
+      crest.rotation.x = -1.15 - c * 0.12;
+      headPivot.add(crest);
+    }
+
+    // Jaunty Aviator Cap & Brass Goggles on the Pelican's Head
+    const aviatorCapGroup = new THREE.Group();
+    aviatorCapGroup.position.set(0, 0.14, -0.02);
+    headPivot.add(aviatorCapGroup);
+
+    const capDome = new THREE.Mesh(
+      new THREE.SphereGeometry(0.36, 18, 12, 0, Math.PI * 2, 0, Math.PI * 0.55),
+      mats.saddleLeather
+    );
+    aviatorCapGroup.add(capDome);
+
+    [-1, 1].forEach((side) => {
+      // Ear flaps
+      const flap = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.32, 0.22), mats.saddleLeather);
+      flap.position.set(side * 0.34, -0.12, -0.02);
+      flap.rotation.z = side * 0.22;
+      aviatorCapGroup.add(flap);
+
+      // Goggle frame & glass lens
+      const goggleRim = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.12, 0.09, 16), mats.brass);
+      goggleRim.rotation.x = Math.PI * 0.5;
+      goggleRim.position.set(side * 0.15, 0.15, 0.31);
+      const goggleLens = new THREE.Mesh(new THREE.CylinderGeometry(0.095, 0.095, 0.095, 16), mats.goggleGlass);
+      goggleLens.rotation.x = Math.PI * 0.5;
+      goggleLens.position.copy(goggleRim.position);
+      aviatorCapGroup.add(goggleRim, goggleLens);
+    });
+
+    // Expressive Pelican Eyes & Blinking Eyelids
+    const eyelids = [];
+    [-1, 1].forEach((side) => {
+      const eyePatch = new THREE.Mesh(new THREE.SphereGeometry(0.11, 12, 12), mats.beakOrange);
+      eyePatch.position.set(side * 0.29, 0.06, 0.20);
+      eyePatch.scale.set(0.6, 1.0, 1.1);
+      headPivot.add(eyePatch);
+
+      const eyeball = new THREE.Mesh(new THREE.SphereGeometry(0.075, 14, 14), mats.eyeWhite);
+      eyeball.position.set(side * 0.33, 0.07, 0.21);
+      headPivot.add(eyeball);
+
+      const pupil = new THREE.Mesh(new THREE.SphereGeometry(0.042, 10, 10), mats.eyePupil);
+      pupil.position.set(side * 0.37, 0.07, 0.23);
+      headPivot.add(pupil);
+
+      const glint = new THREE.Mesh(new THREE.SphereGeometry(0.016, 8, 8), mats.eyeWhite);
+      glint.position.set(side * 0.39, 0.09, 0.25);
+      headPivot.add(glint);
+
+      const lid = new THREE.Mesh(
+        new THREE.SphereGeometry(0.082, 12, 8, 0, Math.PI * 2, 0, Math.PI * 0.5),
+        mats.beakOrange
+      );
+      lid.position.copy(eyeball.position);
+      lid.scale.y = 0.1;
+      headPivot.add(lid);
+      eyelids.push(lid);
+    });
+
+    // Iconic Long Upper Beak + Hooked Tip
+    const upperBeakGroup = new THREE.Group();
+    upperBeakGroup.position.set(0, -0.02, 0.32);
+    headPivot.add(upperBeakGroup);
+
+    const upperBeakGeo = new THREE.ConeGeometry(0.24, 1.82, 14);
+    upperBeakGeo.rotateX(Math.PI * 0.5);
+    upperBeakGeo.scale(1.0, 0.42, 1.0);
+    const upperBeakMesh = new THREE.Mesh(upperBeakGeo, mats.beakOrange);
+    upperBeakMesh.position.set(0, 0.03, 0.88);
+    upperBeakMesh.castShadow = true;
+    upperBeakMesh.userData.interactType = 'beak';
+    upperBeakGroup.add(upperBeakMesh);
+    interactiveTargets.push(upperBeakMesh);
+
+    const beakRidge = new THREE.Mesh(new THREE.BoxGeometry(0.07, 0.06, 1.68), mats.beakTipRed);
+    beakRidge.position.set(0, 0.08, 0.86);
+    upperBeakGroup.add(beakRidge);
+
+    const beakHook = new THREE.Mesh(new THREE.ConeGeometry(0.065, 0.22, 10), mats.beakTipRed);
+    beakHook.position.set(0, -0.03, 1.76);
+    beakHook.rotation.x = Math.PI * 0.92;
+    upperBeakGroup.add(beakHook);
+
+    // Bridle Strap & Brass Bit Rings on the Pelican's Beak (Anchors for the Reins!)
+    const bridleRingMesh = new THREE.Mesh(new THREE.TorusGeometry(0.15, 0.024, 10, 20), mats.darkLeather);
+    bridleRingMesh.position.set(0, -0.02, 1.05);
+    bridleRingMesh.scale.set(1.1, 0.8, 1.0);
+    upperBeakGroup.add(bridleRingMesh);
+
+    const leftBitAnchor = new THREE.Object3D();
+    const rightBitAnchor = new THREE.Object3D();
+    leftBitAnchor.position.set(0.21, -0.05, 1.05);
+    rightBitAnchor.position.set(-0.21, -0.05, 1.05);
+    upperBeakGroup.add(leftBitAnchor, rightBitAnchor);
+
+    [-1, 1].forEach((side) => {
+      const bitRing = new THREE.Mesh(new THREE.TorusGeometry(0.065, 0.016, 10, 18), mats.brass);
+      bitRing.position.set(side * 0.20, -0.05, 1.05);
+      bitRing.rotation.y = Math.PI * 0.5;
+      upperBeakGroup.add(bitRing);
+    });
+
+    // Lower Mandible & Elastic Gular Throat Pouch (喉囊)
+    const jawPivot = new THREE.Group();
+    jawPivot.position.set(0, -0.08, 0.30);
+    headPivot.add(jawPivot);
+
+    const pouchPivot = new THREE.Group();
+    jawPivot.add(pouchPivot);
+
+    // Sculpted Volumetric Throat Pouch
+    const pouchGeo = new THREE.SphereGeometry(0.52, 24, 18, 0, Math.PI * 2, Math.PI * 0.45, Math.PI * 0.55);
+    const pPos = pouchGeo.attributes.position;
+    for (let i = 0; i < pPos.count; i++) {
+      let px = pPos.getX(i);
+      let py = pPos.getY(i);
+      let pz = pPos.getZ(i);
+      // Stretch along the beak length (+Z) and taper at front & back
+      const zNorm = (pz + 0.52) / 1.04;
+      const widthFactor = Math.sin(Math.max(0.05, Math.min(0.98, zNorm)) * Math.PI);
+      px *= 0.46 * widthFactor;
+      py *= 0.88 * Math.pow(widthFactor, 0.7);
+      pz = zNorm * 1.62;
+      pPos.setXYZ(i, px, py, pz);
+    }
+    pouchGeo.computeVertexNormals();
+    const pouchMesh = new THREE.Mesh(pouchGeo, mats.pouchAmber);
+    pouchMesh.castShadow = true;
+    pouchMesh.userData.interactType = 'beak';
+    pouchPivot.add(pouchMesh);
+    interactiveTargets.push(pouchMesh);
+
+    // Fish visible inside the open beak when gulping
+    const pouchFishMesh = new THREE.Mesh(new THREE.ConeGeometry(0.11, 0.46, 10), mats.fishSilver);
+    pouchFishMesh.rotation.x = -Math.PI * 0.4;
+    pouchFishMesh.position.set(0, -0.12, 0.72);
+    pouchFishMesh.visible = false;
+    pouchPivot.add(pouchFishMesh);
+
+    // Webbed Orange Legs & Feet (Left & Right Running Gait)
+    function createPelicanLeg(side) {
+      const hipPivot = new THREE.Group();
+      hipPivot.position.set(side * 0.44, 1.48, -0.04);
+      pelicanGroup.add(hipPivot);
+
+      // Feathered thigh
+      const thigh = new THREE.Mesh(new THREE.ConeGeometry(0.24, 0.56, 12), mats.pelicanWhite);
+      thigh.position.set(0, -0.22, 0);
+      thigh.rotation.x = Math.PI;
+      thigh.castShadow = true;
+      hipPivot.add(thigh);
+
+      // Knee joint & orange shank
+      const kneePivot = new THREE.Group();
+      kneePivot.position.set(0, -0.48, 0);
+      hipPivot.add(kneePivot);
+
+      const shank = new THREE.Mesh(new THREE.CylinderGeometry(0.068, 0.055, 0.72, 10), mats.webbedFootOrange);
+      shank.position.set(0, -0.34, 0);
+      shank.castShadow = true;
+      kneePivot.add(shank);
+
+      // Ankle & Broad Webbed Foot
+      const footPivot = new THREE.Group();
+      footPivot.position.set(0, -0.70, 0);
+      kneePivot.add(footPivot);
+
+      const heel = new THREE.Mesh(new THREE.SphereGeometry(0.075, 10, 10), mats.webbedFootOrange);
+      footPivot.add(heel);
+
+      // Webbed Membrane & 3 Forward Toes
+      const webGeo = new THREE.ConeGeometry(0.32, 0.56, 4);
+      webGeo.rotateX(Math.PI * 0.5);
+      webGeo.scale(1.15, 0.14, 1.0);
+      const webMesh = new THREE.Mesh(webGeo, mats.webbedFootOrange);
+      webMesh.position.set(0, -0.02, 0.24);
+      webMesh.castShadow = true;
+      footPivot.add(webMesh);
+
+      [-0.36, 0, 0.36].forEach((angle) => {
+        const toe = new THREE.Mesh(new THREE.CylinderGeometry(0.022, 0.035, 0.54, 8), mats.beakOrange);
+        toe.rotation.x = Math.PI * 0.5;
+        toe.rotation.z = -angle;
+        toe.position.set(Math.sin(angle) * 0.16, -0.01, 0.24);
+        footPivot.add(toe);
+      });
+
+      return { hipPivot, kneePivot, footPivot };
+    }
+
+    const leftLeg = createPelicanLeg(1);
+    const rightLeg = createPelicanLeg(-1);
+
+    // -------------------------------------------------------------------------
+    // 6B. CUSTOM LEATHER RIDING SADDLE & STIRRUPS ON PELICAN'S BACK
+    // -------------------------------------------------------------------------
+    const saddleGroup = new THREE.Group();
+    saddleGroup.position.set(0, 0.72, -0.08);
+    pelicanBodyPivot.add(saddleGroup);
+
+    // Contoured Leather Saddle Pad
+    const saddlePadGeo = new THREE.CylinderGeometry(0.88, 0.92, 1.16, 20, 1, true, -Math.PI * 0.38, Math.PI * 0.76);
+    saddlePadGeo.rotateZ(Math.PI * 0.5);
+    saddlePadGeo.rotateY(Math.PI * 0.5);
+    const saddlePad = new THREE.Mesh(saddlePadGeo, mats.saddleLeather);
+    saddlePad.position.set(0, -0.68, 0);
+    saddlePad.scale.set(1.04, 0.85, 1.0);
+    saddlePad.castShadow = true;
+    saddleGroup.add(saddlePad);
+
+    // Raised Pommel (Front) & Cantle (Rear)
+    const pommel = new THREE.Mesh(new THREE.TorusGeometry(0.32, 0.085, 12, 18, Math.PI), mats.darkLeather);
+    pommel.position.set(0, 0.05, 0.44);
+    pommel.rotation.x = -0.35;
+    saddleGroup.add(pommel);
+
+    const cantle = new THREE.Mesh(new THREE.TorusGeometry(0.38, 0.095, 12, 18, Math.PI), mats.darkLeather);
+    cantle.position.set(0, 0.08, -0.46);
+    cantle.rotation.x = 0.45;
+    saddleGroup.add(cantle);
+
+    // Belly Girth Strap & Breastplate Collar
+    const girthBelt = new THREE.Mesh(new THREE.TorusGeometry(0.91, 0.045, 10, 28), mats.darkLeather);
+    girthBelt.position.set(0, -0.72, 0.04);
+    girthBelt.rotation.y = Math.PI * 0.5;
+    girthBelt.scale.set(1.0, 0.94, 1.02);
+    saddleGroup.add(girthBelt);
+
+    const chestMedallion = new THREE.Mesh(new THREE.CylinderGeometry(0.14, 0.14, 0.05, 16), mats.brass);
+    chestMedallion.rotation.x = Math.PI * 0.42;
+    chestMedallion.position.set(0, -0.52, 1.56);
+    saddleGroup.add(chestMedallion);
+
+    // Left & Right Stirrups (Hanging on the Pelican's flanks, driven by Bicycle Pedals!)
+    function createStirrupUnit(side) {
+      const unit = new THREE.Group();
+      unit.position.set(side * 0.72, -0.02, 0.05);
+
+      const strap = new THREE.Mesh(new THREE.BoxGeometry(0.03, 0.56, 0.09), mats.darkLeather);
+      strap.position.set(0, -0.26, 0);
+      unit.add(strap);
+
+      const hoop = new THREE.Mesh(new THREE.TorusGeometry(0.11, 0.02, 10, 18), mats.brass);
+      hoop.position.set(0, -0.56, 0);
+      hoop.rotation.y = Math.PI * 0.5;
+      unit.add(hoop);
+
+      const footBar = new THREE.Mesh(new THREE.CylinderGeometry(0.022, 0.022, 0.20, 10), mats.brass);
+      footBar.rotation.x = Math.PI * 0.5;
+      footBar.position.set(0, -0.64, 0);
+      unit.add(footBar);
+
+      return { unit, hoop };
+    }
+
+    const leftStirrup = createStirrupUnit(1);
+    const rightStirrup = createStirrupUnit(-1);
+    saddleGroup.add(leftStirrup.unit, rightStirrup.unit);
+
+    // -------------------------------------------------------------------------
+    // 6C. THE RIDER: VINTAGE RACING BICYCLE (骑在鹈鹕背上的复古公路自行车骑士!)
+    // -------------------------------------------------------------------------
+    const bicycleRiderPivot = new THREE.Group();
+    // Positioned squarely in the saddle atop the Pelican's back
+    bicycleRiderPivot.position.set(0, 0.16, -0.04);
+    saddleGroup.add(bicycleRiderPivot);
+
+    // The Bicycle is pitched in an energetic Jockey/Rider posture:
+    // Rear wheel sits in the saddle cantle, pedals align over the stirrups,
+    // Diamond frame rises as the rider's torso, and handlebars reach forward holding the reins!
+    const bikeFrameGroup = new THREE.Group();
+    bikeFrameGroup.rotation.x = -0.38; // Heroic upward rider posture
+    bicycleRiderPivot.add(bikeFrameGroup);
+
+    // Helper to create cylindrical frame tubes between two 3D points
+    function createTubeBetween(p1, p2, radius, material) {
+      const dir = new THREE.Vector3().subVectors(p2, p1);
+      const len = dir.length();
+      const geo = new THREE.CylinderGeometry(radius, radius, len, 14);
+      geo.translate(0, len * 0.5, 0);
+      geo.rotateX(Math.PI * 0.5);
+      const mesh = new THREE.Mesh(geo, material);
+      mesh.position.copy(p1);
+      mesh.lookAt(p2);
+      mesh.castShadow = true;
+      mesh.userData.interactType = 'bike';
+      interactiveTargets.push(mesh);
+      return mesh;
+    }
+
+    // Key Bicycle Frame Nodes (in bikeFrameGroup local coordinates)
+    const bbPos = new THREE.Vector3(0, 0.42, 0.02);       // Bottom Bracket (Crank Center)
+    const rearAxlePos = new THREE.Vector3(0, 0.44, -0.78); // Rear Wheel Hub (Seated in Saddle!)
+    const seatClusterPos = new THREE.Vector3(0, 1.18, -0.20); // Top of Seat Tube
+    const headTopPos = new THREE.Vector3(0, 1.24, 0.68);  // Top of Head Tube
+    const headBotPos = new THREE.Vector3(0, 0.98, 0.74);  // Bottom of Head Tube
+
+    // Main Diamond Frame Tubes (Seat Tube, Top Tube, Down Tube)
+    bikeFrameGroup.add(
+      createTubeBetween(bbPos, seatClusterPos, 0.042, mats.bikeFrameCrimson),
+      createTubeBetween(seatClusterPos, headTopPos, 0.038, mats.bikeFrameCrimson),
+      createTubeBetween(bbPos, headBotPos, 0.044, mats.bikeFrameCrimson),
+      createTubeBetween(headBotPos, headTopPos, 0.048, mats.brass) // Brass Head Tube!
+    );
+
+    // Left & Right Rear Triangle (Chainstays & Seatstays)
+    [-1, 1].forEach((side) => {
+      const dropout = new THREE.Vector3(side * 0.11, rearAxlePos.y, rearAxlePos.z);
+      const bbSide = new THREE.Vector3(side * 0.07, bbPos.y, bbPos.z);
+      const seatSide = new THREE.Vector3(side * 0.05, seatClusterPos.y - 0.05, seatClusterPos.z);
+      bikeFrameGroup.add(
+        createTubeBetween(bbSide, dropout, 0.026, mats.bikeFrameCrimson),
+        createTubeBetween(seatSide, dropout, 0.024, mats.bikeFrameCrimson)
+      );
+
+      // Gold Lug Accents at Frame Joints
+      const dropoutPlate = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 0.025, 12), mats.brass);
+      dropoutPlate.rotation.z = Math.PI * 0.5;
+      dropoutPlate.position.copy(dropout);
+      bikeFrameGroup.add(dropoutPlate);
+    });
+
+    // Detailed Spoked Bicycle Wheel Builder (Rim, Tire, Hub, Spokes, Brake Disc)
+    function createSpokedWheel(radius = 0.52, spokeCount = 20) {
+      const wheel = new THREE.Group();
+
+      // Rubber Tire with Procedural Tread
+      const tire = new THREE.Mesh(new THREE.TorusGeometry(radius, 0.062, 16, 40), mats.tireRubber);
+      tire.rotation.y = Math.PI * 0.5;
+      tire.castShadow = true;
+      tire.userData.interactType = 'bike';
+      wheel.add(tire);
+      interactiveTargets.push(tire);
+
+      // Crimson & Chrome Deep-Section Alloy Rim
+      const rim = new THREE.Mesh(new THREE.TorusGeometry(radius - 0.042, 0.026, 12, 40), mats.chrome);
+      rim.rotation.y = Math.PI * 0.5;
+      wheel.add(rim);
+
+      // Center Hub & Brass Flanges
+      const hub = new THREE.Mesh(new THREE.CylinderGeometry(0.042, 0.042, 0.19, 14), mats.brass);
+      hub.rotation.z = Math.PI * 0.5;
+      wheel.add(hub);
+
+      [-0.065, 0.065].forEach((flangeX) => {
+        const flange = new THREE.Mesh(new THREE.CylinderGeometry(0.072, 0.072, 0.015, 16), mats.chrome);
+        flange.rotation.z = Math.PI * 0.5;
+        flange.position.x = flangeX;
+        wheel.add(flange);
+      });
+
+      // Tangential / Radial Crossed Stainless Steel Spokes
+      const spokeLen = radius - 0.05;
+      const spokeGeo = new THREE.CylinderGeometry(0.0055, 0.0055, spokeLen, 6);
+      for (let i = 0; i < spokeCount; i++) {
+        const angle = (i / spokeCount) * Math.PI * 2;
+        const side = i % 2 === 0 ? 1 : -1;
+        const spoke = new THREE.Mesh(spokeGeo, mats.chrome);
+        spoke.position.set(
+          side * 0.032,
+          Math.cos(angle) * spokeLen * 0.5,
+          Math.sin(angle) * spokeLen * 0.5
+        );
+        spoke.rotation.x = angle;
+        spoke.rotation.z = -side * 0.065;
+        wheel.add(spoke);
+      }
+
+      // Brass Valve Stem
+      const valve = new THREE.Mesh(new THREE.CylinderGeometry(0.01, 0.01, 0.08, 8), mats.brass);
+      valve.position.set(0, -(radius - 0.08), 0);
+      wheel.add(valve);
+
+      return wheel;
+    }
+
+    // Rear Wheel (Seated right inside the Pelican's Saddle!)
+    const rearWheel = createSpokedWheel(0.50, 22);
+    rearWheel.position.copy(rearAxlePos);
+    bikeFrameGroup.add(rearWheel);
+
+    // Seatpost, Classic Leather Bike Saddle & Flowing Silk Rider's Scarf!
+    const seatPost = createTubeBetween(
+      seatClusterPos,
+      new THREE.Vector3(0, 1.38, -0.25),
+      0.028,
+      mats.chrome
+    );
+    bikeFrameGroup.add(seatPost);
+
+    const bikeSaddleGroup = new THREE.Group();
+    bikeSaddleGroup.position.set(0, 1.40, -0.24);
+    bikeSaddleGroup.rotation.x = 0.28;
+    bikeFrameGroup.add(bikeSaddleGroup);
+
+    const bikeSaddleGeo = new THREE.ConeGeometry(0.16, 0.42, 14);
+    bikeSaddleGeo.rotateX(Math.PI * 0.5);
+    bikeSaddleGeo.scale(1.0, 0.36, 1.0);
+    const bikeSaddleMesh = new THREE.Mesh(bikeSaddleGeo, mats.saddleLeather);
+    bikeSaddleMesh.castShadow = true;
+    bikeSaddleGroup.add(bikeSaddleMesh);
+
+    // Multi-segment Animated Silk Scarf Streaming Behind the Bicycle Rider!
+    const scarfSegments = [];
+    let prevScarfParent = bikeSaddleGroup;
+    for (let s = 0; s < 9; s++) {
+      const segPivot = new THREE.Group();
+      segPivot.position.set(0, s === 0 ? -0.02 : 0, s === 0 ? -0.16 : -0.16);
+      const ribbon = new THREE.Mesh(
+        new THREE.BoxGeometry(0.16 - s * 0.01, 0.018, 0.18),
+        s % 2 === 0 ? mats.scarfSilk : mats.brass
+      );
+      ribbon.position.z = -0.08;
+      ribbon.castShadow = true;
+      segPivot.add(ribbon);
+      prevScarfParent.add(segPivot);
+      scarfSegments.push(segPivot);
+      prevScarfParent = segPivot;
+    }
+
+    // Drivetrain: Crankset, Star Chainring, Pedals, Rear Cassette & 3D Roller Chain
+    const crankAssembly = new THREE.Group();
+    crankAssembly.position.copy(bbPos);
+    bikeFrameGroup.add(crankAssembly);
+
+    // Ornate Brass Chainring
+    const chainring = new THREE.Mesh(new THREE.TorusGeometry(0.19, 0.018, 10, 28), mats.brass);
+    chainring.rotation.y = Math.PI * 0.5;
+    chainring.position.x = 0.095;
+    crankAssembly.add(chainring);
+
+    for (let sp = 0; sp < 5; sp++) {
+      const spider = new THREE.Mesh(new THREE.BoxGeometry(0.016, 0.19, 0.03), mats.brass);
+      spider.position.x = 0.095;
+      spider.rotation.x = (sp / 5) * Math.PI * 2;
+      crankAssembly.add(spider);
+    }
+
+    // Left & Right Crank Arms + Counter-Rotating Pedals
+    const leftPedalPivot = new THREE.Group();
+    const rightPedalPivot = new THREE.Group();
+
+    [-1, 1].forEach((side) => {
+      const arm = new THREE.Mesh(new THREE.BoxGeometry(0.028, 0.28, 0.044), mats.chrome);
+      arm.position.set(side * 0.12, side * 0.12, 0);
+      crankAssembly.add(arm);
+
+      const pedalPivot = side === 1 ? leftPedalPivot : rightPedalPivot;
+      pedalPivot.position.set(side * 0.19, side * 0.24, 0);
+      crankAssembly.add(pedalPivot);
+
+      const pedalPlate = new THREE.Mesh(new THREE.BoxGeometry(0.13, 0.028, 0.09), mats.brass);
+      pedalPlate.castShadow = true;
+      pedalPivot.add(pedalPlate);
+    });
+
+    // 3D Roller Chain Loop Connecting Chainring to Rear Cog
+    const chainLinks = [];
+    const numChainLinks = 28;
+    const chainLinkGeo = new THREE.BoxGeometry(0.022, 0.024, 0.048);
+    for (let c = 0; c < numChainLinks; c++) {
+      const link = new THREE.Mesh(chainLinkGeo, c % 2 === 0 ? mats.darkLeather : mats.brass);
+      bikeFrameGroup.add(link);
+      chainLinks.push(link);
+    }
+
+    // Steering Assembly: Front Fork, Front Wheel, Vintage Brass Headlamp, Stem, Handlebars & Bell!
+    const bikeSteerPivot = new THREE.Group();
+    bikeSteerPivot.position.copy(headTopPos);
+    bikeFrameGroup.add(bikeSteerPivot);
+
+    // Front Fork Blades & Front Wheel
+    const frontAxleLocal = new THREE.Vector3(0, -0.74, 0.24);
+    [-1, 1].forEach((side) => {
+      const crownPt = new THREE.Vector3(side * 0.075, -0.26, 0.06);
+      const forkEndPt = new THREE.Vector3(side * 0.095, frontAxleLocal.y, frontAxleLocal.z);
+      bikeSteerPivot.add(createTubeBetween(crownPt, forkEndPt, 0.025, mats.bikeFrameCrimson));
+    });
+
+    const frontWheel = createSpokedWheel(0.50, 22);
+    frontWheel.position.copy(frontAxleLocal);
+    bikeSteerPivot.add(frontWheel);
+
+    // Vintage Brass Headlamp + Dynamic SpotLight Beam
+    const headlampGroup = new THREE.Group();
+    headlampGroup.position.set(0, -0.10, 0.15);
+    headlampGroup.rotation.x = 0.35;
+    bikeSteerPivot.add(headlampGroup);
+
+    const lampHousing = new THREE.Mesh(new THREE.CylinderGeometry(0.11, 0.075, 0.18, 18), mats.brass);
+    lampHousing.rotation.x = Math.PI * 0.5;
+    headlampGroup.add(lampHousing);
+
+    const lampLens = new THREE.Mesh(new THREE.CircleGeometry(0.102, 18), mats.headlampGlow);
+    lampLens.position.z = 0.092;
+    headlampGroup.add(lampLens);
+
+    const headlampSpot = new THREE.SpotLight(0xffe999, 4.5, 28, Math.PI * 0.22, 0.45, 1.2);
+    headlampSpot.position.set(0, 0, 0.1);
+    headlampSpot.target.position.set(0, -1.6, 8.5);
+    headlampGroup.add(headlampSpot, headlampSpot.target);
+
+    // Volumetric Light Cone Mesh for Headlamp
+    const beamConeGeo = new THREE.ConeGeometry(1.5, 5.5, 20, 1, true);
+    beamConeGeo.translate(0, -2.75, 0);
+    beamConeGeo.rotateX(-Math.PI * 0.5);
+    const beamConeMat = new THREE.MeshBasicMaterial({
+      color: 0xfff1a8,
+      transparent: true,
+      opacity: 0.14,
+      side: THREE.DoubleSide,
+      depthWrite: false
+    });
+    const beamConeMesh = new THREE.Mesh(beamConeGeo, beamConeMat);
+    beamConeMesh.position.z = 0.1;
+    headlampGroup.add(beamConeMesh);
+
+    // Handlebar Stem & Swept Touring Handlebars (Arms of the Bicycle Rider!)
+    const handlebarGroup = new THREE.Group();
+    handlebarGroup.position.set(0, 0.18, 0.08);
+    handlebarGroup.rotation.x = 0.38;
+    bikeSteerPivot.add(handlebarGroup);
+
+    const stemPost = createTubeBetween(
+      new THREE.Vector3(0, -0.20, -0.06),
+      new THREE.Vector3(0, 0, 0),
+      0.026,
+      mats.chrome
+    );
+    handlebarGroup.add(stemPost);
+
+    const centerBar = new THREE.Mesh(new THREE.CylinderGeometry(0.024, 0.024, 0.56, 12), mats.chrome);
+    centerBar.rotation.z = Math.PI * 0.5;
+    handlebarGroup.add(centerBar);
+
+    const leftGripAnchor = new THREE.Object3D();
+    const rightGripAnchor = new THREE.Object3D();
+
+    [-1, 1].forEach((side) => {
+      // Swept drop/grip extensions reaching forward toward the Pelican's Reins!
+      const reachBar = createTubeBetween(
+        new THREE.Vector3(side * 0.27, 0, 0),
+        new THREE.Vector3(side * 0.44, -0.06, 0.22),
+        0.023,
+        mats.chrome
+      );
+      handlebarGroup.add(reachBar);
+
+      // Leather Bar-Tape Grips
+      const grip = createTubeBetween(
+        new THREE.Vector3(side * 0.44, -0.06, 0.22),
+        new THREE.Vector3(side * 0.48, -0.10, 0.02),
+        0.032,
+        mats.saddleLeather
+      );
+      handlebarGroup.add(grip);
+
+      // Brake Levers
+      const brakeLever = new THREE.Mesh(new THREE.BoxGeometry(0.018, 0.12, 0.03), mats.brass);
+      brakeLever.position.set(side * 0.45, -0.11, 0.26);
+      brakeLever.rotation.x = 0.35;
+      handlebarGroup.add(brakeLever);
+
+      const anchor = side === 1 ? leftGripAnchor : rightGripAnchor;
+      anchor.position.set(side * 0.45, -0.07, 0.23);
+      handlebarGroup.add(anchor);
+    });
+
+    // Shiny Brass Bicycle Bell on the Right Handlebar + Expanding Sonic Rings!
+    const bikeBellGroup = new THREE.Group();
+    bikeBellGroup.position.set(0.20, 0.055, 0.02);
+    handlebarGroup.add(bikeBellGroup);
+
+    const bellDome = new THREE.Mesh(new THREE.SphereGeometry(0.065, 16, 12), mats.brass);
+    bellDome.scale.y = 0.72;
+    bellDome.userData.interactType = 'bell';
+    bikeBellGroup.add(bellDome);
+    interactiveTargets.push(bellDome);
+
+    const bellRingWave = new THREE.Mesh(
+      new THREE.TorusGeometry(0.12, 0.012, 10, 24),
+      new THREE.MeshBasicMaterial({ color: 0xffe066, transparent: true, opacity: 0 })
+    );
+    bellRingWave.rotation.x = Math.PI * 0.5;
+    bikeBellGroup.add(bellRingWave);
+
+    // -------------------------------------------------------------------------
+    // 6D. DYNAMIC 3D LEATHER REINS (Connecting Bicycle Handlebars -> Pelican Beak!)
+    //     & PEDAL-TO-STIRRUP MECHANICAL BOOT STRAPS!
+    // -------------------------------------------------------------------------
+    const reinMat = new THREE.MeshStandardMaterial({ color: 0x4a2511, roughness: 0.55 });
+    const leftReinMesh = new THREE.Mesh(new THREE.BufferGeometry(), reinMat);
+    const rightReinMesh = new THREE.Mesh(new THREE.BufferGeometry(), reinMat);
+    leftReinMesh.castShadow = true;
+    rightReinMesh.castShadow = true;
+    scene.add(leftReinMesh, rightReinMesh);
+
+    // Articulated Stirrup Links connecting the Bicycle's Pedals to the Pelican's Stirrups
+    const leftSpurLink = new THREE.Mesh(new THREE.CylinderGeometry(0.018, 0.018, 1, 8), mats.brass);
+    const rightSpurLink = new THREE.Mesh(new THREE.CylinderGeometry(0.018, 0.018, 1, 8), mats.brass);
+    scene.add(leftSpurLink, rightSpurLink);
+
+    const tmpStart = new THREE.Vector3();
+    const tmpEnd = new THREE.Vector3();
+    const tmpMid1 = new THREE.Vector3();
+    const tmpMid2 = new THREE.Vector3();
+
+    function updateDynamicReinsAndStirrups(time) {
+      characterRoot.updateMatrixWorld(true);
+
+      // Update Left & Right Leather Reins from Bicycle Handlebars to Pelican Beak
+      [
+        { grip: leftGripAnchor, bit: leftBitAnchor, mesh: leftReinMesh, side: 1 },
+        { grip: rightGripAnchor, bit: rightBitAnchor, mesh: rightReinMesh, side: -1 }
+      ].forEach(({ grip, bit, mesh, side }) => {
+        grip.getWorldPosition(tmpStart);
+        bit.getWorldPosition(tmpEnd);
+
+        const sag = 0.24 + Math.sin(time * 9 + side) * 0.04;
+        tmpMid1.lerpVectors(tmpStart, tmpEnd, 0.34);
+        tmpMid1.x += side * 0.18;
+        tmpMid1.y -= sag;
+
+        tmpMid2.lerpVectors(tmpStart, tmpEnd, 0.68);
+        tmpMid2.x += side * 0.14;
+        tmpMid2.y -= sag * 0.85;
+
+        const curve = new THREE.CatmullRomCurve3([
+          tmpStart.clone(),
+          tmpMid1.clone(),
+          tmpMid2.clone(),
+          tmpEnd.clone()
+        ]);
+        mesh.geometry.dispose();
+        mesh.geometry = new THREE.TubeGeometry(curve, 16, 0.018, 7, false);
+      });
+
+      // Update Pedal-to-Stirrup Mechanical Linkages
+      [
+        { pedal: leftPedalPivot, stirrup: leftStirrup.hoop, link: leftSpurLink, unit: leftStirrup.unit, side: 1 },
+        { pedal: rightPedalPivot, stirrup: rightStirrup.hoop, link: rightSpurLink, unit: rightStirrup.unit, side: -1 }
+      ].forEach(({ pedal, stirrup, link, unit }) => {
+        pedal.getWorldPosition(tmpStart);
+        // Swing the saddle stirrup gently in sync with the bicycle's pedal motion
+        unit.rotation.x = (tmpStart.z - characterRoot.position.z) * 0.35;
+        unit.updateMatrixWorld(true);
+        stirrup.getWorldPosition(tmpEnd);
+
+        const dist = tmpStart.distanceTo(tmpEnd);
+        link.position.lerpVectors(tmpStart, tmpEnd, 0.5);
+        link.scale.set(1, dist, 1);
+        link.quaternion.setFromUnitVectors(
+          new THREE.Vector3(0, 1, 0),
+          tmpEnd.clone().sub(tmpStart).normalize()
+        );
+      });
+    }
+
+    // =========================================================================
+    // 7. INTERACTIVE FLYING FISH & PARTICLE SYSTEM (Feathers / Sea Spray)
+    // =========================================================================
+    const flyingFishGroup = new THREE.Group();
+    const fishBody = new THREE.Mesh(new THREE.ConeGeometry(0.14, 0.58, 12), mats.fishSilver);
+    fishBody.rotation.x = Math.PI * 0.5;
+    fishBody.scale.set(0.65, 1.0, 1.0);
+    const fishTail = new THREE.Mesh(new THREE.ConeGeometry(0.18, 0.24, 4), mats.beakOrange);
+    fishTail.rotation.x = -Math.PI * 0.5;
+    fishTail.position.z = -0.34;
+    fishTail.scale.set(0.3, 1.0, 1.0);
+    flyingFishGroup.add(fishBody, fishTail);
+    flyingFishGroup.visible = false;
+    scene.add(flyingFishGroup);
+
+    // Footstep / Feather / Spray Particles
+    const particleCount = 42;
+    const particles = [];
+    const particleGeo = new THREE.SphereGeometry(0.06, 8, 8);
+    const particleMat = new THREE.MeshBasicMaterial({ color: 0xfff8e7, transparent: true, opacity: 0.75 });
+    for (let i = 0; i < particleCount; i++) {
+      const pMesh = new THREE.Mesh(particleGeo, particleMat.clone());
+      pMesh.visible = false;
+      scene.add(pMesh);
+      particles.push({
+        mesh: pMesh,
+        vel: new THREE.Vector3(),
+        life: 0,
+        maxLife: 1
+      });
+    }
+
+    function spawnBurstParticles(origin, count = 8, colorHex = 0xfff8e7) {
+      let spawned = 0;
+      for (let i = 0; i < particles.length && spawned < count; i++) {
+        const p = particles[i];
+        if (p.life <= 0) {
+          p.mesh.visible = true;
+          p.mesh.position.copy(origin);
+          p.mesh.material.color.setHex(colorHex);
+          p.vel.set(
+            (Math.random() - 0.5) * 3.2,
+            1.4 + Math.random() * 2.6,
+            -1.5 - Math.random() * 2.5
+          );
+          p.maxLife = 0.45 + Math.random() * 0.35;
+          p.life = p.maxLife;
+          spawned++;
+        }
+      }
+    }
+
+    // =========================================================================
+    // 8. STATE, CONTROLS, CAMERA MODES & UI HANDLERS
+    // =========================================================================
+    const state = {
+      gait: 'gallop',        // 'stroll' | 'gallop' | 'flight'
+      speedMultiplier: 1.2,
+      steerTarget: 0,        // -1 (left) to +1 (right)
+      steerCurrent: 0,
+      lateralX: 0,
+      gaitPhase: 0,
+      wheelAngle: 0,
+      fishCount: 0,
+      fishActive: false,
+      fishProgress: 0,
+      pouchInflate: 0,
+      bellRingTimer: 0,
+      jumpTimer: 0,
+      wingBoostTimer: 0,
+      lampOn: true,
+      timeIndex: 0,          // 0: Noon, 1: Sunset, 2: Starlight Night
+      cameraMode: 'hero'     // 'hero' | 'front' | 'pov' | 'orbit'
+    };
+
+    const timePresets = [
+      {
+        name: '晴空正午',
+        top: 0x1d70b8,
+        horizon: 0xb5ebff,
+        bottom: 0xffe9c6,
+        fog: 0x9be0ff,
+        dirColor: 0xfff5e4,
+        dirIntensity: 2.35,
+        hemiIntensity: 0.95,
+        sunPos: [38, 36, -55],
+        lampAuto: false
+      },
+      {
+        name: '落日余晖',
+        top: 0x2b1d52,
+        horizon: 0xff7b54,
+        bottom: 0xffd56b,
+        fog: 0xf48c64,
+        dirColor: 0xff9e5e,
+        dirIntensity: 2.1,
+        hemiIntensity: 0.72,
+        sunPos: [22, 11, -62],
+        lampAuto: true
+      },
+      {
+        name: '星夜海岸',
+        top: 0x050c1a,
+        horizon: 0x132e4f,
+        bottom: 0x091926,
+        fog: 0x0d2238,
+        dirColor: 0x8ec5fc,
+        dirIntensity: 0.75,
+        hemiIntensity: 0.38,
+        sunPos: [-28, 32, -55],
+        lampAuto: true
+      }
+    ];
+
+    // Toast Helper
+    const toastEl = document.getElementById('event-toast');
+    let toastTimeout = null;
+    function showToast(msg) {
+      toastEl.textContent = msg;
+      toastEl.classList.add('visible');
+      if (toastTimeout) clearTimeout(toastTimeout);
+      toastTimeout = setTimeout(() => toastEl.classList.remove('visible'), 2600);
+    }
+
+    // Actions
+    function triggerFishToss() {
+      if (state.fishActive) return;
+      state.fishActive = true;
+      state.fishProgress = 0;
+      flyingFishGroup.visible = true;
+      sound.playPelicanGulp();
+      showToast('鲜鱼抛出！鹈鹕张开巨喙准备空中接鱼！');
+    }
+
+    function triggerBikeBell() {
+      state.bellRingTimer = 1.0;
+      sound.playBikeBell();
+      showToast('叮铃铃！自行车骑士摇响黄铜车铃，催动鹈鹕提速！');
+    }
+
+    function triggerBunnyHop() {
+      if (state.jumpTimer <= 0) {
+        state.jumpTimer = 1.0;
+        sound.playJumpWhoosh();
+        spawnBurstParticles(new THREE.Vector3(characterRoot.position.x, 0.2, 0), 14, 0xffd166);
+        showToast('骑士拉紧缰绳！自行车与鹈鹕协同完成腾空特技跳跃！');
+      }
+    }
+
+    function updateLampVisibility() {
+      headlampSpot.visible = state.lampOn;
+      beamConeMesh.visible = state.lampOn;
+      mats.headlampGlow.color.setHex(state.lampOn ? 0xfff3b0 : 0x555a60);
+      document.getElementById('btn-lamp').classList.toggle('active', state.lampOn);
+    }
+    updateLampVisibility();
+
+    function applyTimePreset(idx) {
+      state.timeIndex = idx % timePresets.length;
+      const p = timePresets[state.timeIndex];
+      skyUniforms.topColor.value.setHex(p.top);
+      skyUniforms.horizonColor.value.setHex(p.horizon);
+      skyUniforms.bottomColor.value.setHex(p.bottom);
+      scene.fog.color.setHex(p.fog);
+      dirLight.color.setHex(p.dirColor);
+      dirLight.intensity = p.dirIntensity;
+      hemiLight.intensity = p.hemiIntensity;
+      sunGroup.position.set(...p.sunPos);
+      state.lampOn = p.lampAuto || state.lampOn;
+      updateLampVisibility();
+      document.getElementById('btn-time').innerHTML = `天色: ${p.name} <span class="kbd">T</span>`;
+      showToast(`环境天色已切换至：${p.name}`);
+    }
+
+    function setGaitMode(gait) {
+      state.gait = gait;
+      document.querySelectorAll('[data-gait]').forEach((btn) => {
+        btn.classList.toggle('active', btn.dataset.gait === gait);
+      });
+      const labels = { stroll: '悠闲漫步', gallop: '疾风冲刺', flight: '贴海滑翔' };
+      document.getElementById('stat-mode').textContent = labels[gait] || '疾风冲刺';
+      if (gait === 'flight') {
+        showToast('御风模式启动！鹈鹕展翅贴海滑翔，自行车在鞍上飞速踩踏！');
+      } else if (gait === 'gallop') {
+        showToast('疾风冲刺模式！自行车紧拽缰绳，鹈鹕迈开大脚蹼狂奔！');
+      } else {
+        showToast('悠闲漫步模式！海岸微风拂面，一人一鸟惬意巡航。');
+      }
+    }
+
+    function setCameraPreset(camMode) {
+      state.cameraMode = camMode;
+      document.querySelectorAll('[data-cam]').forEach((btn) => {
+        btn.classList.toggle('active', btn.dataset.cam === camMode);
+      });
+      if (camMode === 'hero') {
+        camera.position.set(6.8, 4.1, 6.2);
+        controls.target.set(state.lateralX, 2.55, 0.35);
+      } else if (camMode === 'front') {
+        camera.position.set(2.2, 3.1, 7.8);
+        controls.target.set(state.lateralX, 2.6, 0.6);
+      }
+    }
+
+    // Bind UI Event Listeners
+    document.querySelectorAll('[data-gait]').forEach((btn) => {
+      btn.addEventListener('click', () => setGaitMode(btn.dataset.gait));
+    });
+
+    document.querySelectorAll('[data-cam]').forEach((btn) => {
+      btn.addEventListener('click', () => setCameraPreset(btn.dataset.cam));
+    });
+
+    const speedSlider = document.getElementById('speed-slider');
+    speedSlider.addEventListener('input', (e) => {
+      state.speedMultiplier = parseFloat(e.target.value);
+    });
+
+    const steerSlider = document.getElementById('steer-slider');
+    steerSlider.addEventListener('input', (e) => {
+      state.steerTarget = parseFloat(e.target.value);
+    });
+
+    document.getElementById('btn-fish').addEventListener('click', triggerFishToss);
+    document.getElementById('btn-bell').addEventListener('click', triggerBikeBell);
+    document.getElementById('btn-jump').addEventListener('click', triggerBunnyHop);
+    document.getElementById('btn-lamp').addEventListener('click', () => {
+      state.lampOn = !state.lampOn;
+      updateLampVisibility();
+    });
+    document.getElementById('btn-time').addEventListener('click', () => {
+      applyTimePreset(state.timeIndex + 1);
+    });
+    document.getElementById('btn-audio').addEventListener('click', (e) => {
+      sound.enabled = !sound.enabled;
+      e.currentTarget.innerHTML = `音效: ${sound.enabled ? '开' : '关'} <span class="kbd">M</span>`;
+    });
+
+    const hudEl = document.getElementById('hud');
+    const toggleHudBtn = document.getElementById('toggle-hud-btn');
+    function toggleHud() {
+      const hidden = hudEl.classList.toggle('hud-hidden');
+      toggleHudBtn.innerHTML = `${hidden ? '显示界面' : '隐藏界面'} <span class="kbd">H</span>`;
+    }
+    toggleHudBtn.addEventListener('click', toggleHud);
+
+    // Keyboard Controls
+    const keysHeld = { left: false, right: false };
+    window.addEventListener('keydown', (e) => {
+      const k = e.key.toLowerCase();
+      if (k === '1') setGaitMode('stroll');
+      else if (k === '2') setGaitMode('gallop');
+      else if (k === '3') setGaitMode('flight');
+      else if (k === 'f') triggerFishToss();
+      else if (k === 'b') triggerBikeBell();
+      else if (e.code === 'Space') {
+        e.preventDefault();
+        triggerBunnyHop();
+      } else if (k === 'l') {
+        state.lampOn = !state.lampOn;
+        updateLampVisibility();
+      } else if (k === 't') {
+        applyTimePreset(state.timeIndex + 1);
+      } else if (k === 'm') {
+        document.getElementById('btn-audio').click();
+      } else if (k === 'h') {
+        toggleHud();
+      } else if (k === 'c') {
+        const order = ['hero', 'front', 'pov', 'orbit'];
+        const next = order[(order.indexOf(state.cameraMode) + 1) % order.length];
+        setCameraPreset(next);
+      } else if (k === 'a' || e.key === 'ArrowLeft') {
+        keysHeld.left = true;
+      } else if (k === 'd' || e.key === 'ArrowRight') {
+        keysHeld.right = true;
+      }
+    });
+
+    window.addEventListener('keyup', (e) => {
+      const k = e.key.toLowerCase();
+      if (k === 'a' || e.key === 'ArrowLeft') keysHeld.left = false;
+      if (k === 'd' || e.key === 'ArrowRight') keysHeld.right = false;
+    });
+
+    // 3D Raycasting Click Interaction on Pelican & Bicycle Parts
+    const raycaster = new THREE.Raycaster();
+    const pointer = new THREE.Vector2();
+    let downPos = { x: 0, y: 0 };
+
+    renderer.domElement.addEventListener('pointerdown', (e) => {
+      downPos.x = e.clientX;
+      downPos.y = e.clientY;
+    });
+
+    renderer.domElement.addEventListener('pointerup', (e) => {
+      const moveDist = Math.hypot(e.clientX - downPos.x, e.clientY - downPos.y);
+      if (moveDist > 6) return; // Ignore orbit drags
+
+      pointer.x = (e.clientX / window.innerWidth) * 2 - 1;
+      pointer.y = -(e.clientY / window.innerHeight) * 2 + 1;
+      raycaster.setFromCamera(pointer, camera);
+      const hits = raycaster.intersectObjects(interactiveTargets, false);
+      if (hits.length > 0) {
+        const type = hits[0].object.userData.interactType;
+        if (type === 'bell' || type === 'bike') {
+          triggerBikeBell();
+        } else if (type === 'beak') {
+          triggerFishToss();
+        } else if (type === 'wing') {
+          state.wingBoostTimer = 1.0;
+          spawnBurstParticles(hits[0].point, 10, 0xffffff);
+          showToast('鹈鹕强力扇动双翼，卷起一阵海岸气流！');
+        } else {
+          triggerBunnyHop();
+        }
+      }
+    });
+
+    // =========================================================================
+    // 9. REAL-TIME PROCEDURAL ANIMATION LOOP
+    // =========================================================================
+    const clock = new THREE.Clock();
+    let prevFootSign = 1;
+
+    function animate() {
+      requestAnimationFrame(animate);
+      const dt = Math.min(clock.getDelta(), 0.05);
+      const elapsed = clock.getElapsedTime();
+
+      // 9.1 Speed & Gait Parameters
+      const gaitSpeedFactor = state.gait === 'stroll' ? 0.62 : state.gait === 'flight' ? 1.55 : 1.12;
+      const effectiveSpeed = state.speedMultiplier * gaitSpeedFactor;
+      const cycleFreq = 6.2 * effectiveSpeed;
+      state.gaitPhase += dt * cycleFreq;
+      const phase = state.gaitPhase;
+
+      // Update Telemetry Readout
+      const kmh = (effectiveSpeed * 22.8).toFixed(1);
+      const rpm = Math.round(effectiveSpeed * 74);
+      document.getElementById('stat-speed').textContent = kmh;
+      document.getElementById('stat-rpm').textContent = rpm;
+
+      // 9.2 Steering & Lateral Boardwalk Position
+      if (keysHeld.left) state.steerTarget = Math.max(-1, state.steerTarget - dt * 1.8);
+      if (keysHeld.right) state.steerTarget = Math.min(1, state.steerTarget + dt * 1.8);
+      if (keysHeld.left || keysHeld.right) steerSlider.value = state.steerTarget;
+
+      state.steerCurrent = THREE.MathUtils.lerp(state.steerCurrent, state.steerTarget, dt * 6);
+      state.lateralX = THREE.MathUtils.clamp(
+        state.lateralX - state.steerCurrent * dt * 2.6 * effectiveSpeed,
+        -2.1,
+        2.1
+      );
+
+      // Bunny-Hop / Flight Altitude Calculation
+      let jumpOffsetY = 0;
+      let jumpPitch = 0;
+      if (state.jumpTimer > 0) {
+        state.jumpTimer = Math.max(0, state.jumpTimer - dt * 1.35);
+        const jNorm = 1 - state.jumpTimer;
+        jumpOffsetY = Math.sin(jNorm * Math.PI) * 1.95;
+        jumpPitch = Math.sin(jNorm * Math.PI * 2) * 0.28;
+      }
+
+      const flightAltitude = state.gait === 'flight'
+        ? 1.15 + Math.sin(elapsed * 3.8) * 0.24
+        : 0;
+
+      characterRoot.position.x = state.lateralX;
+      characterRoot.position.y = flightAltitude + jumpOffsetY;
+      characterRoot.rotation.y = -state.steerCurrent * 0.28;
+      characterRoot.rotation.z = state.steerCurrent * 0.14;
+
+      // 9.3 Pelican Body Bounce, Sway & Tail Wag
+      const strideBob = state.gait === 'flight'
+        ? Math.sin(phase * 0.7) * 0.14
+        : Math.abs(Math.sin(phase)) * 0.22;
+      pelicanBodyPivot.position.y = 2.04 + strideBob;
+      pelicanBodyPivot.rotation.z = Math.cos(phase) * (state.gait === 'flight' ? 0.04 : 0.085);
+      pelicanBodyPivot.rotation.x = -0.08 + Math.sin(phase * 2) * 0.05 + jumpPitch;
+
+      tailPivot.rotation.y = Math.sin(phase) * 0.24;
+      tailPivot.rotation.x = Math.cos(phase * 2) * 0.15;
+
+      // 9.4 Pelican Running Legs & Webbed Feet Kinematics
+      [
+        { leg: leftLeg, offset: 0 },
+        { leg: rightLeg, offset: Math.PI }
+      ].forEach(({ leg, offset }) => {
+        const p = phase + offset;
+        if (state.gait === 'flight') {
+          // Tucked aerodynamic streamlined posture during flight
+          leg.hipPivot.rotation.x = -0.82 + Math.sin(p * 0.5) * 0.08;
+          leg.kneePivot.rotation.x = 1.15;
+          leg.footPivot.rotation.x = 0.65;
+        } else {
+          const swing = Math.sin(p);
+          const lift = Math.max(0, Math.cos(p));
+          leg.hipPivot.rotation.x = swing * 0.68;
+          leg.kneePivot.rotation.x = 0.18 + lift * 0.82;
+          leg.footPivot.rotation.x = -swing * 0.45 - lift * 0.35;
+        }
+      });
+
+      // Spawn footstep dust particles on ground contact
+      const currentFootSign = Math.sin(phase) >= 0 ? 1 : -1;
+      if (currentFootSign !== prevFootSign && state.gait !== 'flight' && jumpOffsetY < 0.1) {
+        prevFootSign = currentFootSign;
+        spawnBurstParticles(
+          new THREE.Vector3(characterRoot.position.x + currentFootSign * 0.44, 0.08, 0),
+          4,
+          0xf5e6c8
+        );
+      }
+
+      // 9.5 Multi-Jointed Wing Flapping Animation
+      if (state.wingBoostTimer > 0) {
+        state.wingBoostTimer = Math.max(0, state.wingBoostTimer - dt * 1.4);
+      }
+      const isFlyingOrBoosting = state.gait === 'flight' || state.wingBoostTimer > 0 || state.jumpTimer > 0;
+
+      [
+        { wing: leftWing, side: 1 },
+        { wing: rightWing, side: -1 }
+      ].forEach(({ wing, side }) => {
+        if (isFlyingOrBoosting) {
+          const flapAngle = Math.sin(phase * 0.85) * 0.72;
+          const elbowLag = Math.sin(phase * 0.85 - 0.55) * 0.52;
+          wing.shoulderPivot.rotation.z = side * (0.15 + flapAngle);
+          wing.shoulderPivot.rotation.y = side * 0.12;
+          wing.elbowPivot.rotation.z = side * (0.1 + elbowLag);
+        } else {
+          // Half-tucked energetic balance flaps while running
+          const balanceFlap = Math.abs(Math.sin(phase)) * 0.25 + (state.gait === 'gallop' ? 0.18 : 0.04);
+          wing.shoulderPivot.rotation.z = side * (-0.52 + balanceFlap);
+          wing.shoulderPivot.rotation.y = -side * 0.26;
+          wing.elbowPivot.rotation.z = -side * 0.65;
+        }
+      });
+
+      // 9.6 S-Curved Neck Counter-Bob, Steering Look & Throat Pouch Jiggle
+      const neckThrust = Math.sin(phase * 2 - 0.6) * 0.16;
+      neckBasePivot.rotation.x = 0.14 + neckThrust;
+      neckMidPivot.rotation.x = -0.18 - neckThrust * 0.85;
+      headPivot.rotation.x = 0.06 + neckThrust * 0.35;
+      headPivot.rotation.y = -state.steerCurrent * 0.48; // Pelican turns head when Bicycle pulls reins!
+      headPivot.rotation.z = state.steerCurrent * 0.16;
+
+      // Periodic Eye Blinking
+      const blinkCycle = elapsed % 4.2;
+      const blinkScale = (blinkCycle > 4.02) ? 1.0 : 0.08;
+      eyelids.forEach((lid) => { lid.scale.y = blinkScale; });
+
+      // Flying Fish Arc & Throat Pouch Expansion
+      if (state.fishActive) {
+        state.fishProgress += dt * 1.45;
+        const t = state.fishProgress;
+        if (t < 1.0) {
+          const headWorld = new THREE.Vector3();
+          upperBeakMesh.getWorldPosition(headWorld);
+          const startPos = new THREE.Vector3(characterRoot.position.x + 1.8, 1.2, 7.5);
+          flyingFishGroup.position.lerpVectors(startPos, headWorld, t);
+          flyingFishGroup.position.y += Math.sin(t * Math.PI) * 2.6;
+          flyingFishGroup.rotation.x = t * Math.PI * 4;
+          jawPivot.rotation.x = Math.sin(t * Math.PI) * 0.48;
+        } else {
+          // Caught in the Pelican's Pouch!
+          state.fishActive = false;
+          flyingFishGroup.visible = false;
+          state.pouchInflate = 1.0;
+          state.fishCount++;
+          document.getElementById('stat-fish').textContent = state.fishCount;
+          spawnBurstParticles(upperBeakMesh.getWorldPosition(new THREE.Vector3()), 10, 0x7dd3fc);
+        }
+      } else {
+        jawPivot.rotation.x = 0.05 + Math.abs(Math.sin(phase)) * 0.08;
+      }
+
+      if (state.pouchInflate > 0) {
+        state.pouchInflate = Math.max(0, state.pouchInflate - dt * 1.1);
+        pouchFishMesh.visible = state.pouchInflate > 0.35;
+      }
+
+      const pouchJiggle = 1.0 + Math.sin(phase * 2 - 0.4) * 0.12 + state.pouchInflate * 0.65;
+      pouchPivot.scale.set(
+        1.0 + state.pouchInflate * 0.45,
+        pouchJiggle,
+        1.0 + state.pouchInflate * 0.15
+      );
+
+      // 9.7 Bicycle Rider Animation (Pedaling Crankset, Spinning Wheels, Handlebar Steering, Scarf)
+      state.wheelAngle -= dt * 8.5 * effectiveSpeed;
+      rearWheel.rotation.x = state.wheelAngle;
+      frontWheel.rotation.x = state.wheelAngle;
+
+      // Crankset & Counter-Rotating Pedals
+      const crankAngle = state.wheelAngle * 0.45;
+      crankAssembly.rotation.x = crankAngle;
+      leftPedalPivot.rotation.x = -crankAngle;
+      rightPedalPivot.rotation.x = -crankAngle;
+
+      // Animate 3D Roller Chain along Upper & Lower Runs between Chainring and Rear Axle
+      for (let c = 0; c < numChainLinks; c++) {
+        const progress = ((c / numChainLinks) - (state.wheelAngle * 0.08)) % 1;
+        const normP = (progress + 1) % 1;
+        const link = chainLinks[c];
+        if (normP < 0.5) {
+          // Upper taut chain run
+          const u = normP * 2;
+          link.position.lerpVectors(
+            new THREE.Vector3(0.095, bbPos.y + 0.18, bbPos.z),
+            new THREE.Vector3(0.095, rearAxlePos.y + 0.08, rearAxlePos.z),
+            u
+          );
+        } else {
+          // Lower return chain run
+          const u = (normP - 0.5) * 2;
+          link.position.lerpVectors(
+            new THREE.Vector3(0.095, rearAxlePos.y - 0.08, rearAxlePos.z),
+            new THREE.Vector3(0.095, bbPos.y - 0.18, bbPos.z),
+            u
+          );
+        }
+      }
+
+      // Bicycle Jockey Suspension Bounce & Handlebar Rein-Pulling Motion
+      bicycleRiderPivot.position.y = 0.16 + Math.sin(phase * 2 - 0.3) * 0.06;
+      bikeFrameGroup.rotation.x = -0.38 + Math.sin(phase * 2) * 0.045 - (state.bellRingTimer * 0.12);
+      bikeSteerPivot.rotation.y = -state.steerCurrent * 0.52 + Math.sin(phase) * 0.06;
+
+      // Brass Bell Vibration & Sonic Wave Ring
+      if (state.bellRingTimer > 0) {
+        state.bellRingTimer = Math.max(0, state.bellRingTimer - dt * 1.8);
+        bellDome.position.x = Math.sin(elapsed * 90) * 0.015;
+        const waveScale = 1 + (1 - state.bellRingTimer) * 4.2;
+        bellRingWave.scale.set(waveScale, waveScale, 1);
+        bellRingWave.material.opacity = state.bellRingTimer * 0.85;
+      } else {
+        bellDome.position.x = 0;
+        bellRingWave.material.opacity = 0;
+      }
+
+      // Flowing Silk Scarf Wave
+      scarfSegments.forEach((seg, idx) => {
+        seg.rotation.x = Math.sin(elapsed * 11 * effectiveSpeed - idx * 0.65) * 0.24;
+        seg.rotation.y = Math.cos(elapsed * 8.5 * effectiveSpeed - idx * 0.5) * 0.18 + state.steerCurrent * 0.08;
+      });
+
+      // Update Dynamic Leather Reins & Pedal-to-Stirrup Linkages
+      updateDynamicReinsAndStirrups(elapsed);
+
+      // 9.8 Scrolling Coastal Boardwalk, Ocean Waves, Buoys, Clouds & Particles
+      const scrollSpeed = effectiveSpeed * 5.8;
+      woodTex.offset.y -= dt * scrollSpeed * 0.18;
+
+      const totalPierSpan = numPierPairs * pierSpacing;
+      pierSegments.forEach((seg) => {
+        seg.position.z -= dt * scrollSpeed;
+        if (seg.position.z < -totalPierSpan * 0.5) {
+          seg.position.z += totalPierSpan;
+        }
+      });
+
+      buoys.forEach((b) => {
+        b.group.position.z -= dt * scrollSpeed * 0.65;
+        if (b.group.position.z < -56) b.group.position.z += 112;
+        b.group.position.y = -1.55 + Math.sin(elapsed * 2.4 + b.phase) * 0.18;
+        b.group.rotation.z = Math.cos(elapsed * 1.9 + b.phase) * 0.14;
+      });
+
+      clouds.forEach((c) => {
+        c.group.position.z -= dt * c.speed * effectiveSpeed;
+        if (c.group.position.z < -95) c.group.position.z += 190;
+      });
+
+      // Vertex-Animated Ocean Waves
+      for (let i = 0; i < waterPosAttr.count; i++) {
+        const wx = waterBaseCoords[i * 2];
+        const wz = waterBaseCoords[i * 2 + 1];
+        const waveH =
+          Math.sin(wx * 0.22 + elapsed * 2.1) * 0.24 +
+          Math.cos(wz * 0.18 + elapsed * 2.8) * 0.20;
+        waterPosAttr.setY(i, waveH);
+      }
+      waterPosAttr.needsUpdate = true;
+
+      // Update Active Burst Particles
+      particles.forEach((p) => {
+        if (p.life > 0) {
+          p.life -= dt;
+          p.mesh.position.addScaledVector(p.vel, dt);
+          p.vel.y -= dt * 5.5;
+          const scale = Math.max(0.01, p.life / p.maxLife);
+          p.mesh.scale.setScalar(scale);
+          if (p.life <= 0) p.mesh.visible = false;
+        }
+      });
+
+      // 9.9 Camera Presets Update
+      if (state.cameraMode === 'pov') {
+        // Rider First-Person POV right behind the Bicycle Saddle looking over Handlebars & Pelican Head
+        const povPos = new THREE.Vector3();
+        const povLook = new THREE.Vector3();
+        bikeSaddleGroup.getWorldPosition(povPos);
+        povPos.y += 0.48;
+        povPos.z -= 0.45;
+        upperBeakMesh.getWorldPosition(povLook);
+        povLook.y += 0.25;
+        povLook.z += 2.2;
+        camera.position.lerp(povPos, dt * 8);
+        controls.target.lerp(povLook, dt * 8);
+      } else if (state.cameraMode === 'orbit') {
+        const angle = elapsed * 0.42;
+        camera.position.x = state.lateralX + Math.cos(angle) * 7.8;
+        camera.position.z = Math.sin(angle) * 7.8;
+        camera.position.y = 3.8 + Math.sin(elapsed * 0.9) * 0.6;
+        controls.target.set(state.lateralX, 2.55, 0.35);
+      } else {
+        controls.target.x = THREE.MathUtils.lerp(controls.target.x, state.lateralX, dt * 5);
+      }
+
+      controls.update();
+      renderer.render(scene, camera);
+    }
+
+    // Window Resize Handler
+    window.addEventListener('resize', () => {
+      camera.aspect = window.innerWidth / window.innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(window.innerWidth, window.innerHeight);
+    });
+
+    animate();
+  </script>
+</body>
+</html>
